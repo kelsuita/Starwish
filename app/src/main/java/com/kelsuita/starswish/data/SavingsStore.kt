@@ -6,6 +6,10 @@ import org.json.JSONObject
 
 /** One private preference file. Writes update memory immediately and flush to disk asynchronously. */
 class SavingsStore(context: Context) {
+    companion object {
+        /** Hard cap enforced by [saveAccount]; the WebDAV picker checks it before creating accounts. */
+        const val MAX_ACCOUNTS = 50
+    }
     private val prefs = context.applicationContext.getSharedPreferences("savings_v1", Context.MODE_PRIVATE)
 
     fun developerModeEnabled(): Boolean = prefs.getBoolean("developer_mode", false)
@@ -173,7 +177,7 @@ class SavingsStore(context: Context) {
         require(account.balance in -Money.MAX_CENTS..Money.MAX_CENTS)
         val existing = accounts()
         require(existing.none { it.id != account.id && it.name == account.name }) { tr("account.error_name_exists") }
-        require(existing.any { it.id == account.id } || existing.size < 50) { tr("account.error_max_accounts") }
+        require(existing.any { it.id == account.id } || existing.size < MAX_ACCOUNTS) { tr("account.error_max_accounts") }
         writeAccounts(existing.map { if (it.id == account.id) account.copy(createdAt = it.createdAt) else it }
             .let { if (existing.any { it.id == account.id }) it else it + account.copy(createdAt = System.currentTimeMillis()) })
     }

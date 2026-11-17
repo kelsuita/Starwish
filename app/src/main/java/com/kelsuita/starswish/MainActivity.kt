@@ -139,6 +139,10 @@ import com.kelsuita.starswish.sync.XiaoxingAccessibilityService
 import com.kelsuita.starswish.sync.WebDavClient
 import com.kelsuita.starswish.sync.WebDavSettings
 import com.kelsuita.starswish.sync.SnapshotBalanceReader
+import com.kelsuita.starswish.sync.WebDavAccountSelection
+import com.kelsuita.starswish.sync.WebDavBalanceChange
+import com.kelsuita.starswish.sync.WebDavImportPlan
+import com.kelsuita.starswish.sync.WebDavPickerAccount
 import com.kelsuita.starswish.sync.XiaoxingBackupDecryptor
 import com.kelsuita.starswish.sync.SyncError
 import java.io.File
@@ -182,8 +186,6 @@ private fun monetSeedColor(context: Context): Color? {
 }
 @Serializable
 private data class AppRoute(val page: Int) : NavKey
-/** One confirmed-but-not-yet-applied balance change shown in the import confirmation sheet. */
-private data class WebDavBalanceChange(val accountId: String, val name: String, val before: Long, val after: Long)
 private val NavIcons = listOf(MiuixIcons.Home, MiuixIcons.BankCards, MiuixIcons.Settings)
 /** All transient notices share one short, consistent Snackbar duration. */
 private val NoticeDuration = SnackbarDuration.Custom(durationMillis = 2000)
@@ -368,11 +370,19 @@ private fun SavingsApp(
     // background decrypt.
     var webDavPasswordEdited by remember { mutableStateOf(false) }
     var webDavAccountId by rememberSaveable { mutableStateOf<String?>(null) }
-    var webDavChanges by remember { mutableStateOf<List<WebDavBalanceChange>>(emptyList()) }
+    var webDavPlan by remember { mutableStateOf<WebDavImportPlan?>(null) }
     var webDavChangesVisible by remember { mutableStateOf(false) }
     // Kept aside until the credential sheet has finished hiding: stacking two bottom sheets
     // leaves the outgoing one visible behind the confirmation and both disappear on drag.
-    var pendingWebDavChanges by remember { mutableStateOf<List<WebDavBalanceChange>?>(null) }
+    var pendingWebDavPlan by remember { mutableStateOf<WebDavImportPlan?>(null) }
+    // The account picker opens only for the panel buttons, which have no target local account:
+    // it lists the accounts found in the backup after the connection succeeds.
+    var webDavPicker by remember { mutableStateOf<List<WebDavPickerAccount>>(emptyList()) }
+    var webDavPickerVisible by remember { mutableStateOf(false) }
+    var webDavPickerSelection by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    // Same reason as [pendingWebDavPlan]: the picker must wait for the credentials sheet to
+    // finish hiding before it can animate in.
+    var pendingWebDavPicker by remember { mutableStateOf<List<WebDavPickerAccount>?>(null) }
     // The goal sheet can request the account sheet; open it only after the goal sheet is gone.
     var openAccountAfterGoal by remember { mutableStateOf(false) }
     var aboutIconTaps by rememberSaveable { mutableIntStateOf(0) }
@@ -514,7 +524,8 @@ private fun SavingsApp(
     }
     fun beginWebDavRead(accountId: String? = null) {
         if (!store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
-        pendingWebDavChanges = null
+        pendingWebDavPlan = null
+        pendingWebDavPicker = null
         webDavAccountId = accountId
         webDavUrl = store.webDavUrl()
         webDavAccount = store.webDavAccount()
@@ -531,7 +542,41 @@ private fun SavingsApp(
             if (!webDavPasswordEdited) webDavPassword = stored.getOrDefault("")
         }
     }
-    fun readWebDav(accountId: String? = null) {
+    fun presentWebDavPicker(options: List<WebDavPickerAccount>) {
+        webDavPicker = options
+        webDavPickerSelection = WebDavAccountSelection.defaultSelection(options)
+        webDavPickerVisible = true
+    }
+    /** Applies a plan in one store mutation; returns false when the store rejected it. */
+    fun applyWebDavPlan(plan: WebDavImportPlan): Boolean {
+        val now = System.currentTimeMillis()
+        val applied = mutate {
+            plan.additions.forEach { addition ->
+                store.saveAccount(BankAccount(UUID.randomUUID().toString(), addition.name, addition.cents, now,
+                    source = "account.source_webdav"))
+            }
+            if (plan.changes.isNotEmpty()) {
+                store.saveAccountBalances(plan.changes.associate { it.accountId to it.after }, now)
+            }
+            store.markWebDavConnected()
+        }
+        if (applied) notify(when {
+            plan.changes.isEmpty() && plan.additions.isEmpty() -> tr("webdav.no_changes")
+            plan.additions.isEmpty() -> tr("webdav.success", plan.changes.size)
+            else -> tr("webdav.success_with_new", plan.changes.size, plan.additions.size)
+        })
+        return applied
+    }
+    /** The picker is the last step of a panel read, so the chosen plan is applied right away. */
+    fun confirmWebDavPicker() {
+        if (!webDavPickerVisible) return
+        val selected = webDavPicker.filter { it.note == null && it.id in webDavPickerSelection }
+        if (selected.isEmpty()) return
+        val plan = WebDavAccountSelection.plan(webDavPicker, webDavPickerSelection, store.accounts())
+        if (!applyWebDavPlan(plan)) return
+        webDavPickerVisible = false
+    }
+    fun readWebDav(accountId: String? = null, chooseAccounts: Boolean = true) {
         if (webDavBusy || webDavChangesVisible || !store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
         val saveCredentials = webDavSheet
         val requestedAccountId = if (saveCredentials) webDavAccountId else accountId
@@ -559,13 +604,28 @@ private fun SavingsApp(
                 if (saveCredentials) withContext(Dispatchers.IO) {
                     store.saveWebDavSettings(url, username, WebDavSettings.encryptPassword(password), credentialsEdited)
                 }
+                if (requestedAccountId == null && chooseAccounts) {
+                    // Connecting from the panel lets the user choose which of the backup's
+                    // accounts to take before computing the changes.
+                    val options = WebDavAccountSelection.options(balances, store.accounts())
+                    if (options.none { it.note == null }) throw SyncError("webdav.error_empty_accounts")
+                    val fromCredentialsSheet = webDavSheet
+                    webDavSheet = false
+                    webDavAccountId = null
+                    if (fromCredentialsSheet) {
+                        // Wait for the credential sheet's hide animation, then reveal the picker.
+                        pendingWebDavPicker = options
+                    } else presentWebDavPicker(options)
+                    return@launch
+                }
                 val current = store.accounts().let { accounts ->
                     if (requestedAccountId == null) accounts else accounts.filter { it.id == requestedAccountId }
                 }
                 var matched = 0
                 val changes = current.mapNotNull { account ->
                     val matches = balances.filter { it.name == account.name }
-                    // Accounts this backup does not contain keep their current balance.
+                    // A full re-read keeps accounts the backup does not contain; a single-account
+                    // read reports the missing match instead.
                     if (matches.isEmpty()) {
                         if (requestedAccountId != null) throw SyncError("webdav.error_empty_accounts")
                         return@mapNotNull null
@@ -585,9 +645,9 @@ private fun SavingsApp(
                 webDavAccountId = null
                 if (fromCredentialsSheet) {
                     // Wait for the credential sheet's hide animation, then reveal the confirmation.
-                    pendingWebDavChanges = changes
+                    pendingWebDavPlan = WebDavImportPlan(changes, emptyList())
                 } else {
-                    webDavChanges = changes
+                    webDavPlan = WebDavImportPlan(changes, emptyList())
                     webDavChangesVisible = true
                 }
             } catch (error: Exception) {
@@ -610,15 +670,8 @@ private fun SavingsApp(
     }
     fun confirmWebDavChanges() {
         if (!webDavChangesVisible) return
-        val changes = webDavChanges
-        if (!mutate {
-            if (changes.isNotEmpty()) {
-                store.saveAccountBalances(changes.associate { it.accountId to it.after }, System.currentTimeMillis())
-            }
-            store.markWebDavConnected()
-        }) return
-        webDavChangesVisible = false
-        notify(tr("webdav.success", changes.size))
+        val plan = webDavPlan ?: return
+        if (applyWebDavPlan(plan)) webDavChangesVisible = false
     }
     val accent = MiuixTheme.colorScheme.primary
     // Grouped cards use surfaceContainer; surface keeps their boundary visible in
@@ -1042,7 +1095,7 @@ private fun SavingsApp(
                                 Text(tr("webdav.button"))
                             }
                             if (webDavConnected) {
-                                Button(onClick = { readWebDav() }, modifier = Modifier.fillMaxWidth(), enabled = !webDavBusy) {
+                                Button(onClick = { readWebDav(chooseAccounts = false) }, modifier = Modifier.fillMaxWidth(), enabled = !webDavBusy) {
                                     Text(tr("webdav.reread"))
                                 }
                             }
@@ -1417,9 +1470,14 @@ private fun SavingsApp(
             endAction = { IconButton(onClick = { readWebDav() }, enabled = !webDavBusy) { Icon(MiuixIcons.Ok, contentDescription = tr("common.confirm"), tint = MiuixTheme.colorScheme.onBackground) } },
             onDismissRequest = { if (!webDavBusy) webDavSheet = false },
             onDismissFinished = {
-                pendingWebDavChanges?.let { changes ->
-                    pendingWebDavChanges = null
-                    webDavChanges = changes
+                val picker = pendingWebDavPicker
+                val plan = pendingWebDavPlan
+                if (picker != null) {
+                    pendingWebDavPicker = null
+                    presentWebDavPicker(picker)
+                } else if (plan != null) {
+                    pendingWebDavPlan = null
+                    webDavPlan = plan
                     webDavChangesVisible = true
                 }
             },
@@ -1452,25 +1510,83 @@ private fun SavingsApp(
             }
         }
         OverlayBottomSheet(
+            show = webDavPickerVisible,
+            title = tr("webdav.picker_title"),
+            startAction = { IconButton(onClick = { webDavPickerVisible = false }) { Icon(MiuixIcons.Close, contentDescription = tr("common.cancel"), tint = MiuixTheme.colorScheme.onBackground) } },
+            endAction = {
+                IconButton(onClick = { confirmWebDavPicker() },
+                    enabled = webDavPicker.any { it.note == null && it.id in webDavPickerSelection }) {
+                    Icon(MiuixIcons.Ok, contentDescription = tr("common.confirm"), tint = MiuixTheme.colorScheme.onBackground)
+                }
+            },
+            onDismissRequest = { webDavPickerVisible = false },
+            onDismissFinished = {
+                webDavPicker = emptyList()
+                webDavPickerSelection = emptySet()
+            },
+            insideMargin = DpSize(24.dp, 48.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(tr("webdav.picker_summary"), modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MiuixTheme.textStyles.footnote1,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+                    webDavPicker.forEach { option ->
+                        val note = option.note
+                        val amount = "¥ ${Money.format(option.cents)}"
+                        CheckboxPreference(
+                            title = option.name,
+                            summary = when {
+                                note != null -> "$amount · ${tr(note)}"
+                                option.creates -> "$amount · ${tr("webdav.picker_create")}"
+                                else -> amount
+                            },
+                            checked = option.id in webDavPickerSelection,
+                            enabled = note == null,
+                            onCheckedChange = { checked ->
+                                webDavPickerSelection = if (checked) webDavPickerSelection + option.id
+                                else webDavPickerSelection - option.id
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        OverlayBottomSheet(
             show = webDavChangesVisible,
             title = tr("webdav.confirm_title"),
             startAction = { IconButton(onClick = { webDavChangesVisible = false }) { Icon(MiuixIcons.Close, contentDescription = tr("common.cancel"), tint = MiuixTheme.colorScheme.onBackground) } },
             endAction = { IconButton(onClick = { confirmWebDavChanges() }) { Icon(MiuixIcons.Ok, contentDescription = tr("common.confirm"), tint = MiuixTheme.colorScheme.onBackground) } },
             onDismissRequest = { webDavChangesVisible = false },
-            onDismissFinished = { webDavChanges = emptyList() },
+            onDismissFinished = { webDavPlan = null },
             insideMargin = DpSize(24.dp, 48.dp),
         ) {
+            val plan = webDavPlan
             // The card's bottom edge sits 48dp above the screen bottom (sheet inside margin).
-            Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (webDavChanges.isEmpty()) Text(tr("webdav.no_changes"))
-                    webDavChanges.forEach { change ->
+            Card(Modifier.fillMaxWidth().heightIn(max = 480.dp), colors = sheetCardColors()) {
+                Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (plan == null || (plan.changes.isEmpty() && plan.additions.isEmpty())) {
+                        Text(tr("webdav.no_changes"))
+                    }
+                    plan?.changes?.forEach { change ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Text(change.name, style = MiuixTheme.textStyles.body1, maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f))
                             Text("¥ ${Money.format(change.before)} → ¥ ${Money.format(change.after)}",
+                                style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    plan?.additions?.forEach { addition ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            Text(addition.name, style = MiuixTheme.textStyles.body1, maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f))
+                            Text("${tr("webdav.new_account")} ¥ ${Money.format(addition.cents)}",
                                 style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold)
                         }
                     }

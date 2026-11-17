@@ -53,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -216,8 +217,10 @@ internal fun IosLiquidGlassNavigationBar(
     val pillShape = remember { CircleShape }
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
+    // Dark mode adds a touch of white so the glass doesn't read as flat grey.
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    val containerColor = if (isBlurActive) surfaceContainer.copy(alpha = 0.4f) else surfaceContainer
+    val containerBase = if (isDark) lerpColor(surfaceContainer, Color.White, 0.08f) else surfaceContainer
+    val containerColor = if (isBlurActive) containerBase.copy(alpha = 0.4f) else containerBase
 
     val tabsBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current

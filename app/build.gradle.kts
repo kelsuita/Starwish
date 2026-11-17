@@ -120,8 +120,8 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 22
-        versionName = "Ruan Mei 1.6.7"
+        versionCode = 23
+        versionName = "Sparkle 2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     splits {

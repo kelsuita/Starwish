@@ -28,9 +28,13 @@ If you also use Xiaoxing Ledger (小星记账), the app can read the visible "CN
 open an account detail page yourself, and sync it to a goal after you confirm it. There is no
 background sync, no transaction history is read, and nothing is confirmed on your behalf.
 
+> **A note on the update pace.** Starwish is close to feature-complete, so new versions will arrive
+> less often — Kelsuita would rather take the time to polish what is already here. This is not a
+> farewell; the project is not going anywhere.
+
 ## Download
 
-Current release: [Starwish Ruan Mei 1.6.7](https://github.com/kelsuita/starswish/releases/tag/v1.6.7)
+Current release: [Starwish Sparkle 2.0.0](https://github.com/kelsuita/starswish/releases/tag/v2.0.0)
 
 - `app-universal-release.apk`: universal package, choose this if you are unsure about the ABI
 - `app-armeabi-v7a-release.apk`: 32-bit ARM devices
@@ -45,15 +49,19 @@ Current release: [Starwish Ruan Mei 1.6.7](https://github.com/kelsuita/starswish
 Future releases will keep using the same release key, so release builds can be upgraded in place.
 Do not lose or replace that key — Android will refuse to install a new version as an update otherwise.
 
-## What's new in Ruan Mei 1.6.7
+## What's new in Sparkle 2.0.0
 
-- Dialogs now use the standard Miuix dialog layout with a cancel and confirm pair
-- Card actions and section titles follow the Miuix button and title styles
-- Fixed the home card action row not being laid out correctly
-- Reduced the blur radius of the iOS-style bottom bar
-- Improved how long labels wrap in cards and forms
-- Stability and smoothness improvements
-\n## Quick start
+2.0.0 is where Starwish settles in. The feature set is complete, the everyday flows have been
+through a long round of real-device use, and from here the work is craft rather than scope.
+
+- **A milestone release:** everything the app does is now treated as stable, and future versions focus on refinement instead of expansion
+- The iOS-style floating bottom bar picks up a touch of light in dark mode, so the glass keeps its depth instead of flattening into grey
+- Account lists follow a familiar, locale-aware order instead of the order data happened to arrive in
+- Balance handling is more careful end to end: clearer results, fewer surprises, and no writes the user did not ask for
+- Smoother transitions and gesture animations, with tighter spacing, typography and card details
+- Stability and performance improvements across the whole app
+
+## Quick start
 
 1. Download and install the release APK that matches your device ABI; choose `app-universal-release.apk` if unsure.
 2. Add an account on the "Accounts" tab and enter its balance; you can maintain balances entirely by hand without Xiaoxing Ledger.

@@ -8,7 +8,13 @@ import java.nio.ByteOrder
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
-internal data class SnapshotAccountBalance(val name: String, val currency: Int, val cents: Long, val deleted: Boolean)
+internal data class SnapshotAccountBalance(
+    val id: Long,
+    val name: String,
+    val currency: Int,
+    val cents: Long,
+    val deleted: Boolean,
+)
 
 internal object SnapshotBalanceReader {
     private data class Property(val name: String, val type: Int, val offset: Int)
@@ -87,7 +93,7 @@ internal object SnapshotBalanceReader {
             val name = (row["name"] as? String)?.takeIf(String::isNotBlank)
                 ?: error("账户名称缺失")
             val currency = (row["currency"] as? Number)?.toInt() ?: 0
-            SnapshotAccountBalance(name, currency, centsById[id] ?: error("账户明细关联不一致"), false)
+            SnapshotAccountBalance(id, name, currency, centsById[id] ?: error("账户明细关联不一致"), false)
         }
     }
 
