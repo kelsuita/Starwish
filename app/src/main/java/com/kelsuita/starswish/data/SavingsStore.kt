@@ -16,6 +16,11 @@ class SavingsStore(context: Context) {
     fun setDeveloperMode(enabled: Boolean) {
         prefs.edit().putBoolean("developer_mode", enabled).apply()
     }
+    fun iosBarBlurRadius(): Int = prefs.getInt("ios_bar_blur_radius", IOS_BAR_BLUR_DEFAULT_PX)
+        .coerceIn(0, IOS_BAR_BLUR_MAX_PX)
+    fun setIosBarBlurRadius(radius: Int) {
+        prefs.edit().putInt("ios_bar_blur_radius", radius.coerceIn(0, IOS_BAR_BLUR_MAX_PX)).apply()
+    }
     fun webDavBalanceEnabled(): Boolean = prefs.getBoolean("webdav_balance_enabled", false)
     fun setWebDavBalanceEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("webdav_balance_enabled", enabled).apply()
@@ -86,7 +91,8 @@ class SavingsStore(context: Context) {
         prefs.getBoolean("floating_nav_bar", false),
         prefs.getInt("floating_nav_bar_style", 0).coerceIn(0, 1),
         prefs.getBoolean("predictive_back_enabled", true),
-        prefs.getInt("banner_decimals", 0).coerceIn(0, 5)
+        prefs.getInt("banner_decimals", 0).coerceIn(0, 5),
+        prefs.getBoolean("banner_all_goals", false)
     )
     fun saveAppearance(value: Appearance) {
         require(value.themeMode in 0..2 && value.accentIndex in 0..5 && value.bannerStyle in 0..1 &&
@@ -104,7 +110,8 @@ class SavingsStore(context: Context) {
             .putBoolean("floating_nav_bar", value.floatingNavBar)
             .putInt("floating_nav_bar_style", value.floatingNavBarStyle)
             .putBoolean("predictive_back_enabled", value.predictiveBackEnabled)
-            .putInt("banner_decimals", value.bannerDecimals).apply()
+            .putInt("banner_decimals", value.bannerDecimals)
+            .putBoolean("banner_all_goals", value.bannerAllGoals).apply()
     }
 
     @Synchronized fun exportBackup(): BackupData {
@@ -114,20 +121,23 @@ class SavingsStore(context: Context) {
         }
         return BackupData(exportedAt = System.currentTimeMillis(), accounts = accounts(), goals = goals,
             appearance = appearance, hitokoto = hitokoto(), language = language(),
-            quoteEnabled = quoteEnabled()).validate()
+            quoteEnabled = quoteEnabled(), developerMode = developerModeEnabled(),
+            webDavBalanceEnabled = webDavBalanceEnabled(), iosBarBlurRadius = iosBarBlurRadius()).validate()
     }
 
     @Synchronized fun importBackup(backup: BackupData) {
         backup.validate()
         val value = backup.appearance
+        val restoredAccounts = backup.accounts.mapIndexed { i, account ->
+            if (account.createdAt == 0L) account.copy(createdAt = i.toLong() + 1) else account
+        }
+        val restoredGoals = BannerAggregate.migrate(backup.goals.mapIndexed { i, goal ->
+            if (goal.createdAt == 0L) goal.copy(createdAt = i.toLong() + 1) else goal
+        }, restoredAccounts, System.currentTimeMillis())
         // Commit the complete replacement once, only after every field has passed validation.
         val editor = prefs.edit()
-            .putString("accounts", accountsJson(backup.accounts.mapIndexed { i, account ->
-                if (account.createdAt == 0L) account.copy(createdAt = i.toLong() + 1) else account
-            }).toString())
-            .putString("goals", JSONArray().apply { backup.goals.forEachIndexed { i, goal ->
-                put(goalJson(if (goal.createdAt == 0L) goal.copy(createdAt = i.toLong() + 1) else goal))
-            } }.toString())
+            .putString("accounts", accountsJson(restoredAccounts).toString())
+            .putString("goals", JSONArray().apply { restoredGoals.forEach { put(goalJson(it)) } }.toString())
             .putInt("theme_mode", value.themeMode).putInt("accent_choice", value.accentIndex)
             .putInt("banner_style", value.bannerStyle).putString("featured_goal", value.featuredGoalId)
             .putBoolean("compact_list", value.compactList).putInt("palette_style", value.paletteStyle)
@@ -137,11 +147,14 @@ class SavingsStore(context: Context) {
             .putInt("floating_nav_bar_style", value.floatingNavBarStyle)
             .putBoolean("predictive_back_enabled", value.predictiveBackEnabled)
             .putInt("banner_decimals", value.bannerDecimals)
+            .putBoolean("banner_all_goals", value.bannerAllGoals)
+            .putBoolean("goal_links_v2", true)
             .putInt("language_v2", backup.language)
             .remove("capture").remove("candidate")
-            // Credentials belong to this device, not to the imported backup.
-            .remove("webdav_url").remove("webdav_account").remove("webdav_password")
-            .remove("webdav_connected")
+        // WebDAV credentials and connection state stay on this device.
+        backup.developerMode?.let { editor.putBoolean("developer_mode", it) }
+        backup.webDavBalanceEnabled?.let { editor.putBoolean("webdav_balance_enabled", it) }
+        backup.iosBarBlurRadius?.let { editor.putInt("ios_bar_blur_radius", it) }
         if (backup.quoteEnabled == null) editor.remove("quote_enabled")
         else editor.putBoolean("quote_enabled", backup.quoteEnabled)
         if (backup.hitokoto == null) editor.remove("hitokoto") else editor.putString("hitokoto", backup.hitokoto)
@@ -163,11 +176,12 @@ class SavingsStore(context: Context) {
             runCatching {
                 array.getJSONObject(i).let { o ->
                     val ids = o.optJSONArray("accountIds") ?: JSONArray()
-                    SavingGoal(o.getString("id"), o.getString("title"), o.getLong("target"),
-                        (0 until ids.length()).map { ids.getString(it) }.toSet(),
+                    val accountIds = (0 until ids.length()).map { ids.getString(it) }.toSet()
+                    SavingGoal(o.getString("id"), o.getString("title"), o.getLong("target"), accountIds,
                         runCatching { GoalMode.valueOf(o.optString("mode", "BALANCE")) }
                             .getOrDefault(GoalMode.BALANCE), o.optLong("baseline"),
-                        o.optString("deadline"), o.optInt("colorIndex"), o.optLong("createdAt", i.toLong() + 1))
+                        o.optString("deadline"), o.optInt("colorIndex"), o.optLong("createdAt", i.toLong() + 1),
+                        linksFrom(o, accountIds))
                 }
             }.getOrNull()
         }
@@ -198,11 +212,26 @@ class SavingsStore(context: Context) {
         require(goal.accountIds.all { id -> accounts().any { it.id == id } })
         val existing = goals()
         require(existing.any { it.id == goal.id } || existing.size < 100) { tr("goal.error_max_goals") }
+        // Account-level snapshots are only meaningful for "start from now"; drop anything stale so
+        // a wish can never carry a link for an account it no longer uses.
+        val normalized = goal.copy(links = if (goal.mode == GoalMode.GROWTH)
+            goal.links.filter { it.accountId in goal.accountIds }
+        else emptyList())
         put("goals", JSONArray().apply {
-            existing.map { if (it.id == goal.id) goal.copy(createdAt = it.createdAt) else it }
-                .let { if (existing.any { it.id == goal.id }) it else it + goal.copy(createdAt = System.currentTimeMillis()) }
+            existing.map { if (it.id == goal.id) normalized.copy(createdAt = it.createdAt) else it }
+                .let { if (existing.any { it.id == goal.id }) it else it + normalized.copy(createdAt = System.currentTimeMillis()) }
                 .forEach { put(goalJson(it)) }
         }.toString())
+    }
+    /**
+     * One-time upgrade from a goal-wide baseline to per-account snapshots.
+     */
+    @Synchronized fun migrateGoalLinks(now: Long = System.currentTimeMillis()) {
+        if (prefs.getBoolean("goal_links_v2", false)) return
+        val current = goals()
+        val migrated = BannerAggregate.migrate(current, accounts(), now)
+        put("goals", JSONArray().apply { migrated.forEach { put(goalJson(it)) } }.toString())
+        prefs.edit().putBoolean("goal_links_v2", true).apply()
     }
     @Synchronized fun reorderGoals(ids: List<String>) {
         val current = goals()
@@ -276,4 +305,22 @@ class SavingsStore(context: Context) {
         .put("target", goal.target).put("accountIds", JSONArray(goal.accountIds.toList()))
         .put("mode", goal.mode.name).put("baseline", goal.baseline).put("deadline", goal.deadline)
         .put("colorIndex", goal.colorIndex).put("createdAt", goal.createdAt)
+        .put("links", JSONArray().apply { goal.links.forEach { link ->
+            put(JSONObject().put("accountId", link.accountId).put("mode", link.mode.name)
+                .put("baseline", link.baseline).put("baselineAt", link.baselineAt))
+        } })
+
+    private fun linksFrom(o: JSONObject, accountIds: Set<String>): List<GoalAccountLink> {
+        val array = o.optJSONArray("links") ?: return emptyList()
+        return (0 until array.length()).mapNotNull { i ->
+            runCatching {
+                array.getJSONObject(i).let { link ->
+                    GoalAccountLink(link.getString("accountId"),
+                        runCatching { GoalMode.valueOf(link.optString("mode", "GROWTH")) }
+                            .getOrDefault(GoalMode.GROWTH),
+                        link.optLong("baseline"), link.optLong("baselineAt"))
+                }
+            }.getOrNull()
+        }.filter { it.accountId in accountIds }.distinctBy { it.accountId }
+    }
 }

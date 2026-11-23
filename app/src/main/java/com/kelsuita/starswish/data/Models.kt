@@ -36,6 +36,19 @@ data class BankAccount(
 @Serializable
 enum class GoalMode { BALANCE, GROWTH }
 
+/**
+ * Per wish-account start snapshot. A goal keeps one link per linked account so several wishes
+ * that share an account can still be de-duplicated when their progress is merged.
+ */
+@Serializable
+data class GoalAccountLink(
+    val accountId: String,
+    val mode: GoalMode,
+    /** Balance of [accountId] when "start from now" was switched on (0 for current-balance goals). */
+    val baseline: Long,
+    val baselineAt: Long,
+)
+
 @Serializable
 data class SavingGoal(
     val id: String,
@@ -47,10 +60,23 @@ data class SavingGoal(
     val deadline: String = "",
     val colorIndex: Int = 0,
     val createdAt: Long = 0L,
+    /** Account-level snapshots; empty for goals written before this field existed. */
+    val links: List<GoalAccountLink> = emptyList(),
 ) {
-    fun saved(accounts: List<BankAccount>): Long =
-        (accounts.filter { it.id in accountIds }.sumOf { it.balance } -
-            if (mode == GoalMode.GROWTH) baseline else 0L).coerceAtLeast(0L)
+    fun saved(accounts: List<BankAccount>): Long {
+        val linked = accounts.filter { it.id in accountIds }
+        // With per-account snapshots each account contributes only what it gained, so one
+        // account that fell below its own start snapshot no longer drags down the others.
+        if (mode == GoalMode.GROWTH && links.size == accountIds.size) {
+            val starts = links.associate { it.accountId to it.baseline }
+            return linked.sumOf { account ->
+                val start = starts[account.id] ?: account.balance
+                (account.balance - start).coerceAtLeast(0L)
+            }.coerceAtLeast(0L)
+        }
+        return (linked.sumOf { it.balance } - if (mode == GoalMode.GROWTH) baseline else 0L)
+            .coerceAtLeast(0L)
+    }
     fun progress(accounts: List<BankAccount>): Float =
         if (target <= 0) 0f else (saved(accounts).toDouble() / target).toFloat().coerceIn(0f, 1f)
     fun remaining(accounts: List<BankAccount>): Long = (target - saved(accounts)).coerceAtLeast(0L)

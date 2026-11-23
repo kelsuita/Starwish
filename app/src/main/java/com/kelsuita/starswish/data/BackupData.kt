@@ -19,6 +19,10 @@ data class BackupData(
     val language: Int = 0,
     /** Null means no manual quote choice; the language default then applies. */
     val quoteEnabled: Boolean? = null,
+    // Absent in older backups. Keep the device's current value when restoring those files.
+    val developerMode: Boolean? = null,
+    val webDavBalanceEnabled: Boolean? = null,
+    val iosBarBlurRadius: Int? = null,
 ) {
     fun validate(): BackupData {
         require(format == "starswish-backup" && version == 1) { tr("backup.error_unsupported") }
@@ -39,6 +43,11 @@ data class BackupData(
                 it.accountIds.size <= accounts.size &&
                 it.accountIds.all { id -> id in accountIds } &&
                 it.baseline in -(50 * Money.MAX_CENTS)..(50 * Money.MAX_CENTS) &&
+                it.links.map { link -> link.accountId }.distinct().size == it.links.size &&
+                it.links.all { link ->
+                    link.accountId in it.accountIds &&
+                        link.baseline in -Money.MAX_CENTS..Money.MAX_CENTS && link.baselineAt >= 0
+                } &&
                 it.colorIndex >= 0 && it.createdAt >= 0 && (it.deadline.isEmpty() ||
                 (it.deadline.length == 10 && runCatching { LocalDate.parse(it.deadline) }.isSuccess))) {
                 tr("backup.error_goal_or_account")
@@ -52,19 +61,32 @@ data class BackupData(
             (appearance.featuredGoalId.isEmpty() || goals.any { it.id == appearance.featuredGoalId })) {
             tr("backup.error_appearance")
         }
-        require(language in AppLanguage.entries.indices) { tr("backup.error_settings") }
+        require(language in AppLanguage.entries.indices &&
+            (iosBarBlurRadius == null || iosBarBlurRadius in 0..IOS_BAR_BLUR_MAX_PX)) {
+            tr("backup.error_settings")
+        }
         require(hitokoto == null || (hitokoto.isNotBlank() && hitokoto.length <= 8192)) { tr("backup.error_quote") }
         return this
     }
 
-    fun toJson(): String = codec.encodeToString(validate())
+    fun toJson(): String {
+        val backup = validate()
+        val formatted = codec.encodeToString(backup)
+        if (fitsSizeLimit(formatted)) return formatted
+        val compact = compactCodec.encodeToString(backup)
+        require(fitsSizeLimit(compact)) { tr("backup.error_over_1mb") }
+        return compact
+    }
 
     companion object {
         const val MAX_BYTES = 1024 * 1024
         private val codec = Json { prettyPrint = true; encodeDefaults = true }
+        private val compactCodec = Json(codec) { prettyPrint = false }
+
+        private fun fitsSizeLimit(text: String) = text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES
 
         fun fromJson(text: String): BackupData {
-            require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { tr("backup.error_over_1mb") }
+            require(fitsSizeLimit(text)) { tr("backup.error_over_1mb") }
             val decoded = try {
                 codec.decodeFromString<BackupData>(text.removePrefix("\uFEFF"))
             } catch (error: SerializationException) {

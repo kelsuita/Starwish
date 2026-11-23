@@ -212,6 +212,9 @@ class MainActivity : ComponentActivity() {
         confirmBalanceRequested = intent.action == ACTION_CONFIRM_BALANCE
         enableEdgeToEdge()
         val store = SavingsStore(this)
+        // Upgrade goal-wide baselines to per-account snapshots before the first frame, so the
+        // banner and cards never render a half-migrated state.
+        store.migrateGoalLinks()
         // The language lives outside the appearance snapshot: every screen reads it through
         // Languages.tr while composing, so updating it here repaints without a restart.
         Languages.set(AppLanguage.entries[store.language()])
@@ -299,6 +302,8 @@ private fun SavingsApp(
     val wideLayout = configuration.screenWidthDp >= 600
     val landscape = configuration.screenWidthDp > configuration.screenHeightDp
     val useFloatingNav = appearance.floatingNavBar
+    val useIosBar = useFloatingNav && appearance.floatingNavBarStyle == 1
+    var iosBarBlurRadius by remember(store) { mutableIntStateOf(store.iosBarBlurRadius()) }
     val expandedNavigation = configuration.screenWidthDp >= 1000
     // Use the expandable rail overload so Miuix supplies its own toggle button. The width only
     // supplies the initial state; afterwards the user owns it and it survives rotation.
@@ -311,6 +316,8 @@ private fun SavingsApp(
     val accountGrid = goalGrid || (landscape && configuration.screenWidthDp >= 640)
     val layoutDirection = LocalLayoutDirection.current
     val versionName = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
+    // Only used by the "add everything up" banner; null when the platform hides system accounts.
+    val deviceAccountName = remember { DeviceAccountName.resolve(context) }
     var hitokoto by remember { mutableStateOf(store.hitokoto()) }
     // The quote is a Chinese-only extra. A null choice follows the language default (on for
     // Chinese); once the user toggles it, that stored choice is kept across language switches.
@@ -504,7 +511,7 @@ private fun SavingsApp(
                             output.toByteArray()
                         }
                     require(bytes.size <= BackupData.MAX_BYTES) { tr("backup.error_over_1mb") }
-                    BackupData.fromJson(bytes.toString(Charsets.UTF_8)).toJson()
+                    bytes.toString(Charsets.UTF_8).also { BackupData.fromJson(it) }
                 }
                 importVisible = true
             } catch (error: Exception) {
@@ -867,6 +874,7 @@ private fun SavingsApp(
                         backdrop = bottomBackdrop,
                         isBlurActive = blurActive,
                         isDark = dark,
+                        barBlurRadiusPx = iosBarBlurRadius.toFloat(),
                     )
                 }
             }
@@ -997,7 +1005,7 @@ private fun SavingsApp(
             Spacer(Modifier.height(2.dp))
             when (displayedPage) {
                 0 -> {
-                    Overview(goals, accounts, appearance, accent)
+                    Overview(goals, accounts, appearance, accent, deviceAccountName)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         SmallTitle(tr("home.goal_list"), insideMargin = SectionTitlePadding)
@@ -1283,10 +1291,22 @@ private fun SavingsApp(
                                 bannerDecimalsDraft = appearance.bannerDecimals
                                 bannerDecimalsSheet = true
                             })
-                        if (goals.isNotEmpty()) OverlayDropdownPreference(title = tr("home.banner_goal"),
-                            items = listOf(tr("theme.auto")) + goals.map { it.title },
-                            selectedIndex = goals.indexOfFirst { it.id == appearance.featuredGoalId }.let { if (it < 0) 0 else it + 1 },
-                            onSelectedIndexChange = { value -> mutate { store.saveAppearance(store.appearance().copy(featuredGoalId = if (value == 0) "" else goals[value - 1].id)) } })
+                        // Keep the entry visible while the aggregate is on even if every wish was
+                        // deleted; otherwise the user would have no way back to 自动选择.
+                        if (goals.isNotEmpty() || appearance.bannerAllGoals) OverlayDropdownPreference(title = tr("home.banner_goal"),
+                            items = listOf(tr("theme.auto"), tr("theme.all_goals")) + goals.map { it.title },
+                            selectedIndex = when {
+                                appearance.bannerAllGoals -> 1
+                                else -> goals.indexOfFirst { it.id == appearance.featuredGoalId }
+                                    .let { if (it < 0) 0 else it + 2 }
+                            },
+                            onSelectedIndexChange = { value ->
+                                mutate {
+                                    store.saveAppearance(store.appearance().copy(
+                                        bannerAllGoals = value == 1,
+                                        featuredGoalId = if (value >= 2) goals[value - 2].id else ""))
+                                }
+                            })
                         SwitchPreference(title = tr("settings.compact_cards"), summary = tr("settings.compact_cards_summary"),
                             checked = appearance.compactList,
                             onCheckedChange = { value -> mutate { store.saveAppearance(store.appearance().copy(compactList = value)) } })
@@ -1435,6 +1455,13 @@ private fun SavingsApp(
                                 checked = webDavMode,
                                 onCheckedChange = { value -> mutate { store.setWebDavBalanceEnabled(value) } })
                         }
+                        SmallTitle(text = tr("settings.developer_interface"), insideMargin = SectionTitlePadding)
+                        IosBarBlurPreference(
+                            enabled = useIosBar,
+                            radius = iosBarBlurRadius,
+                            onRadiusChange = { iosBarBlurRadius = it },
+                            onRadiusChangeFinished = { store.setIosBarBlurRadius(iosBarBlurRadius) },
+                        )
                     }
                 }
             }
@@ -1607,6 +1634,10 @@ private fun SavingsApp(
                 onDismissFinished = { pendingBackupJson = null; finished() },
             ) {
                 Note(tr("backup.confirm_summary", backup.accounts.size, backup.goals.size))
+                if (backup.exportedAt > 0L) {
+                    val date = java.text.DateFormat.getDateTimeInstance().format(Date(backup.exportedAt))
+                    Note(tr("backup.created_at", date))
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(text = tr("common.cancel"), onClick = { importVisible = false },
                         enabled = !backupBusy, modifier = Modifier.weight(1f))
@@ -1615,6 +1646,7 @@ private fun SavingsApp(
                             backupBusy = true
                             try {
                                 withContext(Dispatchers.IO) { store.importBackup(backup) }
+                                iosBarBlurRadius = store.iosBarBlurRadius()
                                 hitokoto = backup.hitokoto
                                 quoteChoice = backup.quoteEnabled
                                 Languages.set(AppLanguage.entries[backup.language])
@@ -1732,11 +1764,27 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     else String.format(Locale.ROOT, "%.${decimals.coerceIn(1, 5)}f%%", percent)
 }
 
-@Composable private fun Overview(goals: List<SavingGoal>, accounts: List<BankAccount>, appearance: Appearance, accent: Color) {
-    val featured = goals.firstOrNull { it.id == appearance.featuredGoalId } ?: goals.firstOrNull()
-    val completed = featured != null && featured.saved(accounts) >= featured.target
-    val progress by animateFloatAsState(featured?.progress(accounts) ?: 0f, tween(650), label = "featured-progress")
+@Composable private fun Overview(goals: List<SavingGoal>, accounts: List<BankAccount>, appearance: Appearance,
+    accent: Color, deviceAccountName: String?) {
+    // "Add everything up" replaces the featured wish with the merged progress of every wish.
+    // It needs at least one wish, otherwise the empty-state banner stays as it is.
+    val aggregate = appearance.bannerAllGoals && goals.isNotEmpty()
+    val featured = if (aggregate) null
+        else goals.firstOrNull { it.id == appearance.featuredGoalId } ?: goals.firstOrNull()
+    val aggregated = remember(goals, accounts) { BannerAggregate.result(goals, accounts) }
+    val saved = if (aggregate) aggregated.saved else featured?.saved(accounts) ?: 0L
+    val target = if (aggregate) aggregated.target else featured?.target ?: 0L
+    val rawProgress = if (aggregate) aggregated.progress
+        else if (target <= 0L) 0f else (saved.toDouble() / target).toFloat().coerceIn(0f, 1f)
+    val completed = target > 0L && saved >= target
+    val progress by animateFloatAsState(rawProgress, tween(650), label = "featured-progress")
     val percentText = formatBannerPercent(progress, appearance.bannerDecimals)
+    val title = when {
+        aggregate -> deviceAccountName ?: tr("home.all_wishes")
+        featured != null -> featured.title
+        else -> tr("home.empty_create_goal")
+    }
+    val label = if (aggregate) tr("home.all_wishes") else tr("home.current_wish")
     val status = appearance.bannerStyle == 0
     val foreground = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
     val subtle = foreground.copy(alpha = if (status) .7f else .82f)
@@ -1744,7 +1792,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     val fill = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
     Card(
         modifier = Modifier.fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = tr("home.banner_description", featured?.title ?: tr("home.no_goal"), if (completed) tr("home.completed") else percentText) },
+            .clearAndSetSemantics { contentDescription = tr("home.banner_description", title, if (completed) tr("home.completed") else percentText) },
         cornerRadius = 20.dp,
         insideMargin = PaddingValues(0.dp),
         colors = CardDefaults.defaultColors(color = base),
@@ -1757,14 +1805,14 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 else Symbol("star", foreground.copy(alpha = .22f), Modifier.size(44.dp))
             }
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(tr("home.current_wish"), style = MiuixTheme.textStyles.footnote1, color = subtle)
-                Text(featured?.title ?: tr("home.empty_create_goal"), style = MiuixTheme.textStyles.title2,
+                if (label != title) Text(label, style = MiuixTheme.textStyles.footnote1, color = subtle)
+                Text(title, style = MiuixTheme.textStyles.title2,
                     fontWeight = FontWeight.Bold, color = foreground, maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (featured == null) tr("account.add_before_goal") else
-                        "¥ ${Money.format(featured.saved(accounts))} / ¥ ${Money.format(featured.target)}",
+                    Text(if (featured == null && !aggregate) tr("account.add_before_goal") else
+                        "¥ ${Money.format(saved)} / ¥ ${Money.format(target)}",
                         style = MiuixTheme.textStyles.footnote1, color = subtle, modifier = Modifier.weight(1f))
                     Text(if (completed) tr("home.completed") else percentText,
                         style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, color = foreground)
@@ -1772,11 +1820,13 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 LinearProgressIndicator(progress = progress, height = 8.dp,
                     colors = ProgressIndicatorDefaults.progressIndicatorColors(
                         foregroundColor = fill, backgroundColor = fill.copy(alpha = .20f)))
-                if (featured != null) {
-                    val remainingLabel = if (featured.remaining(accounts) == 0L) tr("goal.achieved")
-                        else tr("goal.remaining_amount", Money.format(featured.remaining(accounts)))
-                    Text(if (featured.deadline.isBlank()) remainingLabel
-                        else tr("format.title_dot_detail", remainingLabel, featured.deadline),
+                if (aggregate || featured != null) {
+                    val remaining = (target - saved).coerceAtLeast(0L)
+                    val remainingLabel = if (remaining == 0L) tr("goal.achieved")
+                        else tr("goal.remaining_amount", Money.format(remaining))
+                    // Only a single wish has a deadline to show; the aggregate covers all of them.
+                    Text(if (featured != null && featured.deadline.isNotBlank())
+                        tr("format.title_dot_detail", remainingLabel, featured.deadline) else remainingLabel,
                         color = subtle, style = MiuixTheme.textStyles.footnote2, maxLines = 1)
                 }
             }
@@ -1927,10 +1977,19 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 if (titleError.isEmpty() && amountError.isEmpty() && accountError.isEmpty() &&
                     dateError.isEmpty() && target != null) {
                     val mode = if (growth) GoalMode.GROWTH else GoalMode.BALANCE
-                    val unchanged = existing != null && existing.accountIds == selected.toSet() && existing.mode == mode
-                    val baseline = if (unchanged) existing.baseline else accounts.filter { it.id in selected }.sumOf { it.balance }
+                    // "Start from now" snapshots each account on its own, so adding an account to an
+                    // existing wish starts that account at today's balance without resetting the
+                    // progress already accumulated on the accounts that were there before.
+                    val now = System.currentTimeMillis()
+                    val previousLinks = existing?.links?.associateBy { it.accountId }.orEmpty()
+                    val keepLinks = existing != null && existing.mode == GoalMode.GROWTH
+                    val links = if (!growth) emptyList() else selected.map { id ->
+                        previousLinks[id]?.takeIf { keepLinks } ?: GoalAccountLink(id, GoalMode.GROWTH,
+                            accounts.first { it.id == id }.balance, now)
+                    }
                     onSave(SavingGoal(existing?.id ?: UUID.randomUUID().toString(), title.trim(), target,
-                        selected.toSet(), mode, if (growth) baseline else 0, date, existing?.colorIndex ?: 0))
+                        selected.toSet(), mode, if (growth) links.sumOf { it.baseline } else 0, date,
+                        existing?.colorIndex ?: 0, links = links))
                 }
             }, enabled = accounts.isNotEmpty(), modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.textButtonColorsPrimary())

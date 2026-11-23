@@ -20,7 +20,7 @@
 
 ## 下载
 
-当前发布版本：[星愿 Sparkle 2.0.0](https://github.com/kelsuita/starswish/releases/tag/v2.0.0)
+当前发布版本：[星愿 Aventurine 2.1.0](https://github.com/kelsuita/starswish/releases/tag/v2.1.0)
 
 - `app-universal-release.apk`：通用架构包，不确定设备架构时选择此包
 - `app-armeabi-v7a-release.apk`：32 位 ARM 设备

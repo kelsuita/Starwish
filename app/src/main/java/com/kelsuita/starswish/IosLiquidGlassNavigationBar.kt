@@ -116,7 +116,6 @@ import kotlin.math.sin
 private val LocalIosTabScale = staticCompositionLocalOf { { 1f } }
 
 /** Bar blur radius in pixels. */
-private const val BAR_BLUR_RADIUS_PX = 25f
 
 private val iosIndicatorSpecular: Highlight = Highlight(
     width = 1.dp,
@@ -212,6 +211,7 @@ internal fun IosLiquidGlassNavigationBar(
     backdrop: LayerBackdrop?,
     isBlurActive: Boolean,
     isDark: Boolean,
+    barBlurRadiusPx: Float,
     modifier: Modifier = Modifier,
 ) {
     val pillShape = remember { CircleShape }
@@ -457,10 +457,7 @@ internal fun IosLiquidGlassNavigationBar(
                                         // 24dp lens refraction + 16dp press-scale reach, raised before blur() reads it.
                                         padding = maxOf(padding, 40.dp.toPx())
                                         vibrancy()
-                                        blur(
-                                            BAR_BLUR_RADIUS_PX,
-                                            BAR_BLUR_RADIUS_PX,
-                                        )
+                                        if (barBlurRadiusPx > 0f) blur(barBlurRadiusPx)
                                         lens(
                                             refractionHeight = 24.dp.toPx(),
                                             refractionAmount = 24.dp.toPx(),
@@ -511,7 +508,7 @@ internal fun IosLiquidGlassNavigationBar(
                                 shape = { pillShape },
                                 effects = {
                                     vibrancy()
-                                    blur(BAR_BLUR_RADIUS_PX, BAR_BLUR_RADIUS_PX)
+                                    if (barBlurRadiusPx > 0f) blur(barBlurRadiusPx)
                                     lens(
                                         refractionHeight = 24.dp.toPx(),
                                         refractionAmount = 24.dp.toPx(),

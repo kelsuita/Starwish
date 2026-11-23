@@ -52,10 +52,45 @@ class BackupDataTest {
     }
 
     @Test fun backupIncludesAllSettings() {
-        val json = backup().toJson()
+        val original = backup().copy(
+            appearance = backup().appearance.copy(bannerAllGoals = true),
+            developerMode = false, webDavBalanceEnabled = true, iosBarBlurRadius = 0,
+            goals = backup().goals.map { goal ->
+                goal.copy(links = listOf(GoalAccountLink("account", GoalMode.GROWTH, 100000L, 5L)))
+            },
+        )
+        val json = original.toJson()
+        assertEquals(original, BackupData.fromJson(json))
         assertTrue(json.contains("\"language\": 3"))
         assertTrue(json.contains("\"quoteEnabled\": false"))
         assertTrue(json.contains("\"predictiveBackEnabled\": false"))
+    }
+
+    @Test fun oldBackupMayOmitNewSettings() {
+        val json = backup().toJson().replace(
+            Regex(""",\s*"(?:developerMode|webDavBalanceEnabled|iosBarBlurRadius)"\s*:\s*null"""), "",
+        )
+        assertFalse(json.contains("iosBarBlurRadius"))
+        assertEquals(backup(), BackupData.fromJson(json))
+    }
+
+    @Test fun largeBackupRemainsImportable() {
+        val accountList = List(50) { index -> BankAccount("$index-${"x".repeat(120)}", "Account $index", 100L, 1L) }
+        val ids = accountList.map { it.id }.toSet()
+        val links = accountList.map { GoalAccountLink(it.id, GoalMode.GROWTH, 50L, 1L) }
+        val original = backup().copy(
+            accounts = accountList,
+            goals = List(90) { index ->
+                SavingGoal("goal-$index", "Goal $index", 5000L, ids, GoalMode.GROWTH, 2500L, links = links)
+            },
+            appearance = Appearance(),
+        )
+        // Near the limit, expanded indentation must not make an exported file unreadable.
+        val json = original.copy(goals = original.goals.take(60)).let { supported ->
+            supported.toJson().also { assertEquals(supported, BackupData.fromJson(it)) }
+        }
+        assertFalse(json.contains('\n'))
+        assertThrows(IllegalArgumentException::class.java) { original.toJson() }
     }
 
     @Test fun invalidBackupsAreRejected() {
@@ -71,6 +106,8 @@ class BackupDataTest {
             original.copy(appearance = Appearance(bannerDecimals = 6)),
             original.copy(appearance = Appearance(featuredGoalId = "missing")),
             original.copy(language = AppLanguage.entries.size),
+            original.copy(iosBarBlurRadius = -1),
+            original.copy(iosBarBlurRadius = 41),
         ).forEach { value -> assertThrows(IllegalArgumentException::class.java) { value.toJson() } }
         assertThrows(IllegalArgumentException::class.java) { BackupData.fromJson("{}") }
         assertThrows(IllegalArgumentException::class.java) { BackupData.fromJson("x".repeat(BackupData.MAX_BYTES + 1)) }

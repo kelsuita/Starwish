@@ -20,7 +20,7 @@ Starwish はお金には触れません。「いくら貯めたいか、あと�
 
 ## ダウンロード
 
-現在のリリース：[Starwish Sparkle 2.0.0](https://github.com/kelsuita/starswish/releases/tag/v2.0.0)
+現在のリリース：[Starwish Aventurine 2.1.0](https://github.com/kelsuita/starswish/releases/tag/v2.1.0)
 
 - `app-universal-release.apk`：汎用パッケージ。端末のアーキテクチャが不明な場合はこれを選択
 - `app-armeabi-v7a-release.apk`：32 ビット ARM 端末

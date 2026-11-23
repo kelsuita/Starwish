@@ -3,6 +3,9 @@
     <!-- Blur is created only on Android 13+; older devices retain opaque bars. -->
     <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The "add everything up" banner labels itself with the phone's own account name when the
+         platform exposes it; without this permission that lookup always comes back empty. -->
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <queries><package android:name="com.cxincx.xxjz" /></queries>
     <application
         android:name=".StarwishApp"

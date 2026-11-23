@@ -34,7 +34,7 @@ background sync, no transaction history is read, and nothing is confirmed on you
 
 ## Download
 
-Current release: [Starwish Sparkle 2.0.0](https://github.com/kelsuita/starswish/releases/tag/v2.0.0)
+Current release: [Starwish Aventurine 2.1.0](https://github.com/kelsuita/starswish/releases/tag/v2.1.0)
 
 - `app-universal-release.apk`: universal package, choose this if you are unsure about the ABI
 - `app-armeabi-v7a-release.apk`: 32-bit ARM devices

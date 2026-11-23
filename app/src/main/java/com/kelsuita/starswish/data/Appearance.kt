@@ -21,4 +21,6 @@ data class Appearance(
     val predictiveBackEnabled: Boolean = true,
     /** Decimal places shown on the home banner progress, 0 means a whole percent. */
     val bannerDecimals: Int = 0,
+    /** Home banner shows every wish added up instead of one featured wish. */
+    val bannerAllGoals: Boolean = false,
 )
