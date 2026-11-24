@@ -168,6 +168,7 @@
   "home.banner": "ホームバナー",
   "home.banner_description": "ホームバナー %s %s",
   "home.banner_goal": "バナーの目標",
+  "home.banner_total": "合計",
   "home.completed": "貯蓄の成果が出ました",
   "home.completed_early": "予定より早く達成",
   "home.current_wish": "現在の願い",

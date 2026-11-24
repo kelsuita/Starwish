@@ -168,6 +168,7 @@
   "home.banner": "Home banner",
   "home.banner_description": "Home banner %s %s",
   "home.banner_goal": "Banner goal",
+  "home.banner_total": "Total",
   "home.completed": "All that saving paid off",
   "home.completed_early": "Finished ahead of schedule",
   "home.current_wish": "Current wish",

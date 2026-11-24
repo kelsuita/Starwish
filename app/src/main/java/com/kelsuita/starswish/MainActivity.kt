@@ -1784,7 +1784,15 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         featured != null -> featured.title
         else -> tr("home.empty_create_goal")
     }
-    val label = if (aggregate) tr("home.all_wishes") else tr("home.current_wish")
+    // The caption names what the banner covers, following the normal wish banner's caption + title
+    // pair. In aggregate mode the title is the phone account when Android exposes one, so the
+    // caption keeps saying "all wishes"; when the title itself has to fall back to "all wishes",
+    // the caption names the aggregation instead of repeating the title.
+    val label = when {
+        !aggregate -> tr("home.current_wish")
+        title == tr("home.all_wishes") -> tr("home.banner_total")
+        else -> tr("home.all_wishes")
+    }
     val status = appearance.bannerStyle == 0
     val foreground = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
     val subtle = foreground.copy(alpha = if (status) .7f else .82f)
@@ -1805,6 +1813,9 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 else Symbol("star", foreground.copy(alpha = .22f), Modifier.size(44.dp))
             }
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The caption line is part of the header in every mode, so the banner keeps the same
+                // height whether it shows one wish or the aggregate and switching targets never
+                // reflows the page.
                 if (label != title) Text(label, style = MiuixTheme.textStyles.footnote1, color = subtle)
                 Text(title, style = MiuixTheme.textStyles.title2,
                     fontWeight = FontWeight.Bold, color = foreground, maxLines = 2,
