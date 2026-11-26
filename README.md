@@ -51,16 +51,13 @@ Do not lose or replace that key — Android will refuse to install a new version
 
 ## What's new in Robin 2.2.0
 
-2.2.0 is a housekeeping release about one thing: sorting that behaves the way you expect.
+Three changes, all about cutting a step out of the everyday loop.
 
-- **Rebuilt drag-to-reorder:** dropping a card now persists the order immediately, so leaving the page or switching tabs can no longer quietly revert it
-- The order stays put while balances refresh in the background instead of jumping back mid-drag
-- Chinese names sort by pinyin, matching how the system orders contacts, instead of by raw character code
-- Name, time, price, progress, remaining amount and deadline sorting for wishes; name, time, balance and linked-wish count for accounts
-- Reversing is now part of the criterion itself: the active row shows an arrow, and tapping it again flips the direction
-- Undo after every sort, so a wrong tap is one press away from being undone
-- Haptics when picking a card up and when it crosses a slot, faster auto-scroll near the edges, and drag actions for screen readers
-- A hand-made order is kept as its own choice, so you can go back to it after trying a criterion sort
+- **Balance updates stay where you are:** the "Update balance" action on a wish card no longer sends you to the accounts tab. It reads exactly the accounts that wish is linked to, one at a time, with a progress line and an in-page panel that shows each amount and capture time before writing it back
+- **A proper total banner:** the combined home banner now has the same two-line header as a normal wish card — a subtitle above the title — so its height and title baseline line up instead of sitting lower
+- **Rebuilt drag-to-reorder:** dropping a card persists the order at that instant, background balance refreshes no longer rebuild the list under your finger, and Chinese names sort by pinyin
+- More sort criteria (wishes: name, time, target, progress, remaining, deadline with undated last; accounts: name, time, balance, linked-wish count), with direction shown on the active row and undone in one press if you mis-tap
+- Haptics while dragging, faster auto-scroll near the edges, and move-to-top / move-to-bottom actions for screen readers
 
 ## What's new in Sparkle 2.0.0
 
