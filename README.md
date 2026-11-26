@@ -49,28 +49,6 @@ Current release: [Starwish Robin 2.2.0](https://github.com/kelsuita/starswish/re
 Future releases will keep using the same release key, so release builds can be upgraded in place.
 Do not lose or replace that key — Android will refuse to install a new version as an update otherwise.
 
-## What's new in Robin 2.2.0
-
-Three changes, all about cutting a step out of the everyday loop.
-
-- **Balance updates stay where you are:** the "Update balance" action on a wish card no longer sends you to the accounts tab. It reads exactly the accounts that wish is linked to, one at a time, with a progress line and an in-page panel that shows each amount and capture time before writing it back
-- **A proper total banner:** the combined home banner now has the same two-line header as a normal wish card — a subtitle above the title — so its height and title baseline line up instead of sitting lower
-- **Rebuilt drag-to-reorder:** dropping a card persists the order at that instant, background balance refreshes no longer rebuild the list under your finger, and Chinese names sort by pinyin
-- More sort criteria (wishes: name, time, target, progress, remaining, deadline with undated last; accounts: name, time, balance, linked-wish count), with direction shown on the active row and undone in one press if you mis-tap
-- Haptics while dragging, faster auto-scroll near the edges, and move-to-top / move-to-bottom actions for screen readers
-
-## What's new in Sparkle 2.0.0
-
-2.0.0 is where Starwish settles in. The feature set is complete, the everyday flows have been
-through a long round of real-device use, and from here the work is craft rather than scope.
-
-- **A milestone release:** everything the app does is now treated as stable, and future versions focus on refinement instead of expansion
-- The iOS-style floating bottom bar picks up a touch of light in dark mode, so the glass keeps its depth instead of flattening into grey
-- Account lists follow a familiar, locale-aware order instead of the order data happened to arrive in
-- Balance handling is more careful end to end: clearer results, fewer surprises, and no writes the user did not ask for
-- Smoother transitions and gesture animations, with tighter spacing, typography and card details
-- Stability and performance improvements across the whole app
-
 ## Quick start
 
 1. Download and install the release APK that matches your device ABI; choose `app-universal-release.apk` if unsure.
