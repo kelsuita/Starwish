@@ -232,7 +232,6 @@
   "sort.balance": "Sort by balance",
   "sort.custom": "Custom order",
   "sort.deadline": "By deadline",
-  "sort.descending": "Reversed",
   "sort.done": "Order updated",
   "sort.drag_handle": "Reorder %s",
   "sort.goals_title": "Reorder goals",

@@ -232,7 +232,6 @@
   "sort.balance": "餘額排序",
   "sort.custom": "自訂順序",
   "sort.deadline": "按截止日期排序",
-  "sort.descending": "倒序",
   "sort.done": "已按新順序排列",
   "sort.drag_handle": "拖曳排序 %s",
   "sort.goals_title": "目標排序",

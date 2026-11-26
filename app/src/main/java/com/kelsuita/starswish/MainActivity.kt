@@ -603,26 +603,11 @@ private fun SavingsApp(
             state.settings.value.manualOrder ?: current)
         sortWithUndo(state, sortingGoals, next, settings)
     }
-    fun reverseSortOrder(sortingGoals: Boolean) {
-        val state = if (sortingGoals) goalSort else accountSort
-        val criterion = state.settings.value.criterion
-        val descending = !state.settings.value.descending
-        if (criterion >= 0) applySortCriterion(sortingGoals, criterion, descending) else {
-            val current = state.snapshot().order
-            val reversed = current.reversed()
-            val settings = state.settings.value.copy(descending = descending, manualOrder = reversed)
-            sortWithUndo(state, sortingGoals, reversed, settings)
-        }
-    }
     fun toggleDescending(sortingGoals: Boolean) {
         val state = if (sortingGoals) goalSort else accountSort
-        if (state.settings.value.criterion >= 0) reverseSortOrder(sortingGoals) else {
-            val queue = if (sortingGoals) goalSortQueue else accountSortQueue
-            queue.revision++
-            queue.cancel()
-            state.settings.value = state.settings.value.copy(descending = !state.settings.value.descending)
-            persistSortOrder(sortingGoals, state, state.snapshot().order, state.settings.value, immediate = true)
-        }
+        val criterion = state.settings.value.criterion
+        // Direction only applies to a criterion; a hand-made order has no natural reverse.
+        if (criterion >= 0) applySortCriterion(sortingGoals, criterion, !state.settings.value.descending)
     }
     fun restoreManualOrder(sortingGoals: Boolean) {
         val state = if (sortingGoals) goalSort else accountSort
@@ -1176,12 +1161,9 @@ private fun SavingsApp(
                             manualOrder?.takeIf { criterion >= 0 }?.let {
                                 DropdownItem(tr("sort.custom"), onClick = { restoreManualOrder(sortingGoals) })
                             },
-                            // Hand-made order needs its own flip entry because no criterion is active.
-                            tr("sort.descending").takeIf { criterion < 0 }?.let {
-                                DropdownItem(it, selected = descending, onClick = { toggleDescending(sortingGoals) })
-                            },
                         ))
-                        OverlayIconDropdownMenu(entries = listOf(sortEntry, orderEntry), collapseOnSelection = true) {
+                        OverlayIconDropdownMenu(entries = listOfNotNull(sortEntry, orderEntry.takeIf { it.items.isNotEmpty() }),
+                            collapseOnSelection = true) {
                             Icon(MiuixIcons.More, contentDescription = tr("sort.menu"), modifier = Modifier.size(24.dp))
                         }
                     }
