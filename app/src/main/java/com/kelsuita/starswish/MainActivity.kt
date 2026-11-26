@@ -376,7 +376,9 @@ private fun SavingsApp(
     // only when the credentials really changed, and to avoid overwriting typing during a
     // background decrypt.
     var webDavPasswordEdited by remember { mutableStateOf(false) }
-    var webDavAccountId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Accounts the pending read is limited to; empty means the whole backup. A goal card fills
+    // it with that goal's linked accounts so the read touches nothing else.
+    var webDavAccountIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var webDavPlan by remember { mutableStateOf<WebDavImportPlan?>(null) }
     var webDavChangesVisible by remember { mutableStateOf(false) }
     // Kept aside until the credential sheet has finished hiding: stacking two bottom sheets
@@ -406,6 +408,10 @@ private fun SavingsApp(
     // The banner decimal count is edited in a sheet, so the draft only hits storage on confirm.
     var bannerDecimalsSheet by remember { mutableStateOf(false) }
     var bannerDecimalsDraft by remember { mutableIntStateOf(0) }
+    // Account ids a goal card still has to read through the accessibility service, in order. The
+    // queue keeps 「更新余额」 on the goal card instead of sending the user to the accounts page.
+    var captureQueue by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var captureTotal by rememberSaveable { mutableIntStateOf(0) }
     val hapticFeedback = LocalHapticFeedback.current
     val pendingBackup = remember(pendingBackupJson) {
         pendingBackupJson?.let { runCatching { BackupData.fromJson(it) }.getOrNull() }
@@ -418,7 +424,10 @@ private fun SavingsApp(
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(confirmBalanceRequested) {
         if (confirmBalanceRequested) {
-            navigate(1)
+            // A goal card's read keeps the user on the home page: the confirmation panel is
+            // rendered there too, and the queue continues with the next account after each
+            // confirm. Only a read started elsewhere needs the accounts page.
+            if (captureQueue.isEmpty()) navigate(1)
             goalEditor = false
             accountEditor = false
             disclosure = false
@@ -522,6 +531,9 @@ private fun SavingsApp(
     }
     fun capture(account: BankAccount) {
         if (!readerEnabled()) { disclosure = true; return }
+        // A single read from the account card replaces any goal-card queue.
+        captureQueue = emptyList()
+        captureTotal = 0
         if (mutate { store.startCapture(account.id) }) {
             if (!openXiaoxing()) {
                 mutate { store.cancelCapture() }
@@ -529,11 +541,43 @@ private fun SavingsApp(
             } else notify(tr("accessibility.open_account_page", account.name))
         }
     }
-    fun beginWebDavRead(accountId: String? = null) {
+    /** Reads the next queued account; every account needs its own pass through the reader. */
+    fun startNextCapture() {
+        while (captureQueue.isNotEmpty()) {
+            val account = store.accounts().firstOrNull { it.id == captureQueue.first() }
+            if (account == null) { captureQueue = captureQueue.drop(1); continue }
+            if (!readerEnabled()) { captureQueue = emptyList(); disclosure = true; return }
+            if (!mutate { store.startCapture(account.id) }) { captureQueue = emptyList(); return }
+            if (!openXiaoxing()) {
+                mutate { store.cancelCapture() }
+                captureQueue = emptyList()
+                notify(tr("accessibility.error_xiaoxing_missing"))
+            } else notify(tr("accessibility.open_account_page", account.name))
+            return
+        }
+    }
+    /** Confirms the shown candidate and moves on to the next queued account, if any. */
+    fun acceptCapturedBalance() {
+        if (!mutate { store.acceptCandidate() }) return
+        val remaining = captureQueue.drop(1)
+        captureQueue = remaining
+        if (remaining.isNotEmpty()) {
+            startNextCapture()
+        } else {
+            // The last confirmation ends the read, so no "waiting to read" panel lingers behind it.
+            mutate { store.cancelCapture() }
+            if (captureTotal > 1) notify(tr("accessibility.queue_done", captureTotal))
+        }
+    }
+    fun cancelCaptureQueue() {
+        captureQueue = emptyList()
+        captureTotal = 0
+    }
+    fun beginWebDavRead(accountIds: List<String> = emptyList()) {
         if (!store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
         pendingWebDavPlan = null
         pendingWebDavPicker = null
-        webDavAccountId = accountId
+        webDavAccountIds = accountIds
         webDavUrl = store.webDavUrl()
         webDavAccount = store.webDavAccount()
         webDavPasswordEdited = false
@@ -583,10 +627,10 @@ private fun SavingsApp(
         if (!applyWebDavPlan(plan)) return
         webDavPickerVisible = false
     }
-    fun readWebDav(accountId: String? = null, chooseAccounts: Boolean = true) {
+    fun readWebDav(accountIds: List<String> = emptyList(), chooseAccounts: Boolean = true) {
         if (webDavBusy || webDavChangesVisible || !store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
         val saveCredentials = webDavSheet
-        val requestedAccountId = if (saveCredentials) webDavAccountId else accountId
+        val requested = if (saveCredentials) webDavAccountIds else accountIds
         // Only a real credential edit should invalidate the stored "connected" state.
         val credentialsEdited = saveCredentials && (webDavPasswordEdited ||
             webDavUrl.trim() != store.webDavUrl() || webDavAccount.trim() != store.webDavAccount())
@@ -611,14 +655,14 @@ private fun SavingsApp(
                 if (saveCredentials) withContext(Dispatchers.IO) {
                     store.saveWebDavSettings(url, username, WebDavSettings.encryptPassword(password), credentialsEdited)
                 }
-                if (requestedAccountId == null && chooseAccounts) {
+                if (requested.isEmpty() && chooseAccounts) {
                     // Connecting from the panel lets the user choose which of the backup's
                     // accounts to take before computing the changes.
                     val options = WebDavAccountSelection.options(balances, store.accounts())
                     if (options.none { it.note == null }) throw SyncError("webdav.error_empty_accounts")
                     val fromCredentialsSheet = webDavSheet
                     webDavSheet = false
-                    webDavAccountId = null
+                    webDavAccountIds = emptyList()
                     if (fromCredentialsSheet) {
                         // Wait for the credential sheet's hide animation, then reveal the picker.
                         pendingWebDavPicker = options
@@ -626,15 +670,17 @@ private fun SavingsApp(
                     return@launch
                 }
                 val current = store.accounts().let { accounts ->
-                    if (requestedAccountId == null) accounts else accounts.filter { it.id == requestedAccountId }
+                    if (requested.isEmpty()) accounts else accounts.filter { it.id in requested }
                 }
+                if (current.isEmpty()) throw SyncError("webdav.error_empty_accounts")
                 var matched = 0
                 val changes = current.mapNotNull { account ->
                     val matches = balances.filter { it.name == account.name }
-                    // A full re-read keeps accounts the backup does not contain; a single-account
-                    // read reports the missing match instead.
+                    // A full re-read keeps accounts the backup does not contain; a read narrowed
+                    // to a single account reports the missing match instead. A goal reads several
+                    // accounts at once, so an account missing from the backup is simply skipped.
                     if (matches.isEmpty()) {
-                        if (requestedAccountId != null) throw SyncError("webdav.error_empty_accounts")
+                        if (requested.size == 1) throw SyncError("webdav.error_empty_accounts")
                         return@mapNotNull null
                     }
                     if (matches.size != 1) throw SyncError("webdav.error_match", account.name)
@@ -649,7 +695,7 @@ private fun SavingsApp(
                 refresh()
                 val fromCredentialsSheet = webDavSheet
                 webDavSheet = false
-                webDavAccountId = null
+                webDavAccountIds = emptyList()
                 if (fromCredentialsSheet) {
                     // Wait for the credential sheet's hide animation, then reveal the confirmation.
                     pendingWebDavPlan = WebDavImportPlan(changes, emptyList())
@@ -673,6 +719,30 @@ private fun SavingsApp(
                 temp.deleteRecursively()
                 webDavBusy = false
             }
+        }
+    }
+    /**
+     * Refreshes the balances of the accounts linked to [goal] from the same source the account
+     * page uses, without leaving the page: the WebDAV backup when it is on, the reader otherwise.
+     */
+    fun updateGoalBalances(goal: SavingGoal) {
+        val ids = store.accounts().filter { it.id in goal.accountIds }.map { it.id }
+        // Never let a leftover accessibility queue from an earlier read bleed into this one.
+        captureQueue = emptyList()
+        captureTotal = 0
+        if (ids.isEmpty()) {
+            notify(tr("goal.no_linked_accounts"))
+            return
+        }
+        if (webDavActive) {
+            if (webDavConnected) {
+                notify(tr("webdav.reading_toast"))
+                readWebDav(ids)
+            } else beginWebDavRead(ids)
+        } else {
+            captureTotal = ids.size
+            captureQueue = ids
+            startNextCapture()
         }
     }
     fun confirmWebDavChanges() {
@@ -990,6 +1060,39 @@ private fun SavingsApp(
         val baseSide = if (wideLayout) 32.dp else 16.dp
         val sideStart = maxOf(baseSide, pagePadding.calculateStartPadding(layoutDirection), cutoutStart)
         val sideEnd = maxOf(baseSide, pagePadding.calculateEndPadding(layoutDirection), cutoutEnd)
+        // A balance read can start from a goal card, so its status and confirmation are shared by
+        // the home page and the accounts page instead of living only where the read used to start.
+        val captureStatus: @Composable () -> Unit = {
+            val shown = candidate
+            if (shown != null) {
+                val account = accounts.firstOrNull { it.id == shown.accountId }
+                Panel {
+                    StatusPill(tr("accessibility.waiting_confirm"))
+                    Text(account?.name ?: tr("account.error_already_deleted"), style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
+                    Text("¥ ${Money.format(shown.balance)}", style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
+                    if (captureTotal > 1) Note(tr("accessibility.queue_progress",
+                        (captureTotal - captureQueue.size + 1).coerceAtLeast(1), captureTotal))
+                    Note(tr("accessibility.recognized_at", timeLabel(shown.capturedAt)))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TextButton(text = tr("common.ignore"), onClick = { cancelCaptureQueue(); mutate { store.clearCandidate() } },
+                            modifier = Modifier.weight(1f))
+                        TextButton(text = tr("accessibility.confirm_sync"), onClick = { acceptCapturedBalance() },
+                            enabled = account != null, modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary())
+                    }
+                }
+            }
+            if (!webDavActive && request != null && request.expiresAt > System.currentTimeMillis()) {
+                Panel {
+                    Text(tr("accessibility.waiting_page"), style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
+                    if (captureTotal > 1) Note(tr("accessibility.queue_progress",
+                        (captureTotal - captureQueue.size + 1).coerceAtLeast(1), captureTotal))
+                    Note(tr("accessibility.read_steps_detail"))
+                    TextButton(text = tr("accessibility.cancel_read"),
+                        onClick = { cancelCaptureQueue(); mutate { store.cancelCapture() } })
+                }
+            }
+        }
         Column(Modifier.fillMaxHeight()
             .then(if (wideLayout) Modifier.widthIn(max = 880.dp) else Modifier)
             .fillMaxWidth()
@@ -1006,6 +1109,7 @@ private fun SavingsApp(
             when (displayedPage) {
                 0 -> {
                     Overview(goals, accounts, appearance, accent, deviceAccountName)
+                    captureStatus()
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         SmallTitle(tr("home.goal_list"), insideMargin = SectionTitlePadding)
@@ -1023,7 +1127,7 @@ private fun SavingsApp(
                         GoalCard(goal, accounts,
                             onEdit = { editingGoalId = goal.id; goalEditor = true },
                             onDelete = { deletingGoal = goal; deletingGoalVisible = true },
-                            onSync = { navigate(1) }, compact = appearance.compactList,
+                            onSync = { updateGoalBalances(goal) }, compact = appearance.compactList,
                             decimals = appearance.bannerDecimals)
                     }
                     if (goalGrid) {
@@ -1040,30 +1144,7 @@ private fun SavingsApp(
                     }
                 }
                 1 -> {
-                    if (candidate != null) {
-                        val account = accounts.firstOrNull { it.id == candidate.accountId }
-                        Panel {
-                            StatusPill(tr("accessibility.waiting_confirm"))
-                            Text(account?.name ?: tr("account.error_already_deleted"), style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
-                            Text("¥ ${Money.format(candidate.balance)}", style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
-                            Note(tr("accessibility.recognized_at", timeLabel(candidate.capturedAt)))
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TextButton(text = tr("common.ignore"), onClick = { mutate { store.clearCandidate() } },
-                                    modifier = Modifier.weight(1f))
-                                TextButton(text = tr("accessibility.confirm_sync"), onClick = { mutate { store.acceptCandidate() } },
-                                    enabled = account != null, modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.textButtonColorsPrimary())
-                            }
-                        }
-                    }
-                    if (!webDavActive && request != null && request.expiresAt > System.currentTimeMillis()) {
-                        Panel {
-                            Text(tr("accessibility.waiting_page"), style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
-                            Note(tr("accessibility.read_steps_detail"))
-                            TextButton(text = tr("accessibility.cancel_read"),
-                                onClick = { mutate { store.cancelCapture() } })
-                        }
-                    }
+                    captureStatus()
                     Panel {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             IconTile("link")
@@ -1139,8 +1220,8 @@ private fun SavingsApp(
                                 if (webDavActive) {
                                     if (webDavConnected) {
                                         notify(tr("webdav.reading_toast"))
-                                        readWebDav(account.id)
-                                    } else beginWebDavRead(account.id)
+                                        readWebDav(listOf(account.id))
+                                    } else beginWebDavRead(listOf(account.id))
                                 } else capture(account)
                             }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColorsPrimary())
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
