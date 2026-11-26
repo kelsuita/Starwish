@@ -31,6 +31,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -56,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,6 +86,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -92,6 +95,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -131,6 +135,8 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.squircle.squircleSurface
+import top.yukonga.miuix.kmp.squircle.isSquircleEnabled
+import top.yukonga.miuix.kmp.squircle.addSquircleRect
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.kelsuita.starswish.data.*
@@ -146,6 +152,7 @@ import com.kelsuita.starswish.sync.WebDavPickerAccount
 import com.kelsuita.starswish.sync.XiaoxingBackupDecryptor
 import com.kelsuita.starswish.sync.SyncError
 import java.io.File
+import java.text.Collator
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -290,9 +297,24 @@ private fun SavingsApp(
     val backStack = rememberNavBackStack<AppRoute>(AppRoute(0))
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
-    // Sort commits are serialized and written off the UI thread; SharedPreferences commit()
-    // fsyncs and would otherwise drop a frame right after the drop animation.
+    // Serialize sorting writes and keep list serialization off the UI thread.
     val sortCommitLock = remember { Mutex() }
+    var sortDataVersion by remember { mutableIntStateOf(0) }
+    var sortUndoJob by remember { mutableStateOf<Job?>(null) }
+    // Name ordering follows the app language, not just the system one: pinyin for Chinese, so
+    // Chinese titles do not end up in UTF-16 code point order.
+    val nameCollator = remember(Languages.current) {
+        Collator.getInstance(Locale.forLanguageTag(Languages.current.pack.ifEmpty { "en" }))
+    }
+    val goalNameOrder = remember(nameCollator) {
+        Comparator<SavingGoal> { a, b -> nameCollator.compare(a.title, b.title) }
+    }
+    val accountNameOrder = remember(nameCollator) {
+        Comparator<BankAccount> { a, b -> nameCollator.compare(a.name, b.name) }
+    }
+    // A sorting session can produce several drops; writes are coalesced and flushed on page exit.
+    val goalSortQueue = remember { SortWriteQueue(scope) }
+    val accountSortQueue = remember { SortWriteQueue(scope) }
     var navigationJob by remember { mutableStateOf<Job?>(null) }
     val selectedTab = pagerState.targetPage
     // Compact/medium/expanded breakpoints follow the Miuix adaptive shell: phones keep the
@@ -438,8 +460,20 @@ private fun SavingsApp(
             onConfirmationOpened()
         }
     }
-    val accounts = remember(revision) { store.accounts() }
-    val goals = remember(revision) { store.goals() }
+    val storedAccounts = remember(revision) { store.accounts() }
+    val storedGoals = remember(revision) { store.goals() }
+    val goalIds = remember(storedGoals) { storedGoals.map { it.id } }
+    val accountIds = remember(storedAccounts) { storedAccounts.map { it.id } }
+    val goalSort = remember(goalIds.toSet(), sortDataVersion) {
+        SortPageState(goalIds, store.sortSettings(goals = true))
+    }
+    val accountSort = remember(accountIds.toSet(), sortDataVersion) {
+        SortPageState(accountIds, store.sortSettings(goals = false))
+    }
+    val goalsById = remember(storedGoals) { storedGoals.associateBy { it.id } }
+    val accountsById = remember(storedAccounts) { storedAccounts.associateBy { it.id } }
+    val goals = remember(goalsById, goalSort.order.value) { goalSort.order.value.mapNotNull(goalsById::get) }
+    val accounts = remember(accountsById, accountSort.order.value) { accountSort.order.value.mapNotNull(accountsById::get) }
     val developerMode = remember(revision) { store.developerModeEnabled() }
     val webDavMode = remember(revision) { store.webDavBalanceEnabled() }
     val webDavConnected = remember(revision) { store.webDavConnected() }
@@ -472,18 +506,130 @@ private fun SavingsApp(
     }
     fun mutate(block: () -> Unit): Boolean = runCatching { block(); refresh(); true }
         .getOrElse { notify(it.message ?: tr("common.operation_failed")); false }
-    // Reordering is visually complete before this runs. Persist it on a background thread so
-    // the synchronous SharedPreferences commit cannot stall the frame after the card settles.
-    fun commitSortOrder(previous: List<String>, write: () -> Unit, restore: (List<String>) -> Unit) {
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching { sortCommitLock.withLock { write() } }
-            }
-            if (result.isSuccess) refresh() else {
-                restore(previous)
-                notify(result.exceptionOrNull()?.message ?: tr("common.operation_failed"))
+    fun invalidateSortUndo() {
+        sortUndoJob?.cancel()
+        sortUndoJob = null
+    }
+    fun persistSortOrder(sortingGoals: Boolean, state: SortPageState, ids: List<String>, settings: SortSettings, immediate: Boolean) {
+        val queue = if (sortingGoals) goalSortQueue else accountSortQueue
+        queue.revision++
+        val writeRevision = queue.revision
+        queue.submit {
+            sortCommitLock.withLock {
+                if (writeRevision != queue.revision) return@withLock
+                try {
+                    withContext(Dispatchers.IO) {
+                        if (sortingGoals) store.reorderGoals(ids, settings) else store.reorderAccounts(ids, settings)
+                    }
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    if (writeRevision == queue.revision) {
+                        invalidateSortUndo()
+                        state.drag.clear()
+                        state.order.value = if (sortingGoals) store.goals().map { it.id } else store.accounts().map { it.id }
+                        state.settings.value = store.sortSettings(sortingGoals)
+                        notify(error.message ?: tr("common.operation_failed"))
+                        refresh()
+                    }
+                }
             }
         }
+        if (immediate) queue.flush()
+    }
+    fun applySortOrder(state: SortPageState, sortingGoals: Boolean, ids: List<String>, settings: SortSettings) {
+        state.drag.clear()
+        state.order.value = ids
+        state.settings.value = settings
+        persistSortOrder(sortingGoals, state, ids, settings, immediate = true)
+    }
+    fun saveManualSort(state: SortPageState, sortingGoals: Boolean, ids: List<String>) {
+        invalidateSortUndo()
+        val settings = SortSettings(manualOrder = ids)
+        state.settings.value = settings
+        persistSortOrder(sortingGoals, state, ids, settings, immediate = false)
+    }
+    fun sortWithUndo(state: SortPageState, sortingGoals: Boolean, next: List<String>, nextSettings: SortSettings) {
+        val queue = if (sortingGoals) goalSortQueue else accountSortQueue
+        queue.revision++
+        queue.cancel()
+        val previous = state.snapshot()
+        if (previous.order == next && previous.settings == nextSettings) return
+        invalidateSortUndo()
+        applySortOrder(state, sortingGoals, next, nextSettings)
+        sortUndoJob = scope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = tr("sort.done"),
+                actionLabel = tr("common.undo"),
+                withDismissAction = true,
+                duration = SnackbarDuration.Custom(5000L),
+            )
+            if (result == SnackbarResult.ActionPerformed && !state.drag.active &&
+                state.snapshot() == SortSnapshot(next, nextSettings)) {
+                val liveIds = if (sortingGoals) store.goals().map { it.id } else store.accounts().map { it.id }
+                if (liveIds.toSet() == next.toSet()) {
+                    applySortOrder(state, sortingGoals, previous.order, previous.settings)
+                }
+            }
+            sortUndoJob = null
+        }
+    }
+    fun applySortCriterion(sortingGoals: Boolean, index: Int, descending: Boolean) {
+        val state = if (sortingGoals) goalSort else accountSort
+        val current = state.snapshot().order
+        val sorted = if (sortingGoals) {
+            val wishes = current.mapNotNull(goalsById::get)
+            when (index) {
+                0 -> wishes.sortedWith(goalNameOrder)
+                1 -> wishes.sortedBy { it.createdAt }
+                2 -> wishes.sortedBy { it.target }
+                3 -> wishes.sortedByDescending { it.progress(accounts) }
+                4 -> wishes.sortedBy { it.remaining(accounts) }
+                else -> wishes.sortedWith(compareBy<SavingGoal> { it.deadline.isEmpty() }.thenBy { it.deadline })
+            }.map { it.id }
+        } else {
+            val linkedAccounts = current.mapNotNull(accountsById::get)
+            when (index) {
+                0 -> linkedAccounts.sortedWith(accountNameOrder)
+                1 -> linkedAccounts.sortedBy { it.createdAt }
+                2 -> linkedAccounts.sortedBy { it.balance }
+                else -> linkedAccounts.sortedByDescending { account -> goals.count { account.id in it.accountIds } }
+            }.map { it.id }
+        }
+        val next = if (!descending) sorted else if (sortingGoals && index == 5) {
+            val datedCount = goals.count { it.deadline.isNotEmpty() }
+            sorted.take(datedCount).reversed() + sorted.drop(datedCount)
+        } else sorted.reversed()
+        val settings = SortSettings(index, descending,
+            state.settings.value.manualOrder ?: current)
+        sortWithUndo(state, sortingGoals, next, settings)
+    }
+    fun reverseSortOrder(sortingGoals: Boolean) {
+        val state = if (sortingGoals) goalSort else accountSort
+        val criterion = state.settings.value.criterion
+        val descending = !state.settings.value.descending
+        if (criterion >= 0) applySortCriterion(sortingGoals, criterion, descending) else {
+            val current = state.snapshot().order
+            val reversed = current.reversed()
+            val settings = state.settings.value.copy(descending = descending, manualOrder = reversed)
+            sortWithUndo(state, sortingGoals, reversed, settings)
+        }
+    }
+    fun toggleDescending(sortingGoals: Boolean) {
+        val state = if (sortingGoals) goalSort else accountSort
+        if (state.settings.value.criterion >= 0) reverseSortOrder(sortingGoals) else {
+            val queue = if (sortingGoals) goalSortQueue else accountSortQueue
+            queue.revision++
+            queue.cancel()
+            state.settings.value = state.settings.value.copy(descending = !state.settings.value.descending)
+            persistSortOrder(sortingGoals, state, state.snapshot().order, state.settings.value, immediate = true)
+        }
+    }
+    fun restoreManualOrder(sortingGoals: Boolean) {
+        val state = if (sortingGoals) goalSort else accountSort
+        val manual = state.settings.value.manualOrder ?: return
+        val live = if (sortingGoals) goalIds.toSet() else accountIds.toSet()
+        val restored = manual.filter { it in live }.distinct() + state.snapshot().order.filterNot { it in manual }
+        sortWithUndo(state, sortingGoals, restored, SortSettings(manualOrder = restored))
     }
     var backupBusy by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -1005,39 +1151,39 @@ private fun SavingsApp(
                 actions = {
                     if (displayedPage == 6 || displayedPage == 7) {
                         val sortingGoals = displayedPage == 6
-                        var sortCriterion by rememberSaveable(displayedPage) { mutableIntStateOf(-1) }
-                        var descending by rememberSaveable(displayedPage) { mutableStateOf(false) }
-                        fun applySort(criterion: Int, isDescending: Boolean) {
-                            if (sortingGoals) {
-                                val sorted = when (criterion) {
-                                    0 -> goals.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
-                                    1 -> goals.sortedBy { it.createdAt }
-                                    else -> goals.sortedBy { it.target }
-                                }
-                                mutate { store.reorderGoals((if (isDescending) sorted.reversed() else sorted).map { it.id }) }
-                            } else {
-                                val sorted = when (criterion) {
-                                    0 -> accounts.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-                                    1 -> accounts.sortedBy { it.createdAt }
-                                    else -> accounts.sortedBy { it.balance }
-                                }
-                                mutate { store.reorderAccounts((if (isDescending) sorted.reversed() else sorted).map { it.id }) }
-                            }
+                        val (criterion, descending, manualOrder) =
+                            (if (sortingGoals) goalSort else accountSort).settings.value
+                        val criteria = if (sortingGoals) listOf(
+                            tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
+                            tr("sort.progress") to 3, tr("sort.remaining") to 4, tr("sort.deadline") to 5,
+                        ) else listOf(
+                            tr("sort.name") to 0, tr("sort.time") to 1,
+                            tr("sort.balance") to 2, tr("sort.links") to 3,
+                        )
+                        // The menu fits seven rows, so direction is shown on the active criterion
+                        // (tap it again to flip) instead of costing an eighth row.
+                        val sortEntry = DropdownEntry(criteria.map { (label, index) ->
+                            DropdownItem(
+                                if (criterion == index) "$label ${if (descending) "↓" else "↑"}" else label,
+                                selected = criterion == index,
+                                onClick = {
+                                    val latest = if (sortingGoals) goalSort else accountSort
+                                    if (latest.settings.value.criterion == index) toggleDescending(sortingGoals)
+                                    else applySortCriterion(sortingGoals, index, latest.settings.value.descending)
+                                })
+                        })
+                        val orderEntry = DropdownEntry(listOfNotNull(
+                            manualOrder?.takeIf { criterion >= 0 }?.let {
+                                DropdownItem(tr("sort.custom"), onClick = { restoreManualOrder(sortingGoals) })
+                            },
+                            // Hand-made order needs its own flip entry because no criterion is active.
+                            tr("sort.descending").takeIf { criterion < 0 }?.let {
+                                DropdownItem(it, selected = descending, onClick = { toggleDescending(sortingGoals) })
+                            },
+                        ))
+                        OverlayIconDropdownMenu(entries = listOf(sortEntry, orderEntry), collapseOnSelection = true) {
+                            Icon(MiuixIcons.More, contentDescription = tr("sort.menu"), modifier = Modifier.size(24.dp))
                         }
-                        OverlayIconDropdownMenu(entries = listOf(
-                            DropdownEntry(listOf(
-                                DropdownItem(tr("sort.name"), selected = sortCriterion == 0, onClick = { sortCriterion = 0; applySort(0, descending) }),
-                                DropdownItem(tr("sort.time"), selected = sortCriterion == 1, onClick = { sortCriterion = 1; applySort(1, descending) }),
-                                DropdownItem(if (sortingGoals) tr("sort.price") else tr("sort.balance"), selected = sortCriterion == 2,
-                                    onClick = { sortCriterion = 2; applySort(2, descending) }),
-                            )),
-                            DropdownEntry(listOf(DropdownItem(tr("sort.descending"), selected = descending, onClick = {
-                                if (sortCriterion >= 0) applySort(sortCriterion, !descending)
-                                else if (sortingGoals) mutate { store.reorderGoals(goals.map { it.id }.reversed()) }
-                                else mutate { store.reorderAccounts(accounts.map { it.id }.reversed()) }
-                                descending = !descending
-                            }))),
-                        ), collapseOnSelection = false) { Icon(MiuixIcons.More, contentDescription = tr("sort.menu"), modifier = Modifier.size(24.dp)) }
                     }
                 },
                 navigationIcon = {
@@ -1244,34 +1390,34 @@ private fun SavingsApp(
                     }
                 }
                 6 -> {
-                    val goalOrder = remember(goals) { mutableStateOf(goals.map { it.id }) }
-                    val goalDrag = remember { SortDragState() }
-                    goalOrder.value.forEach { id -> key(id) {
-                        val goal = goals.firstOrNull { it.id == id }
+                    DisposableEffect(goalSortQueue, goalSort) {
+                        onDispose {
+                            goalSort.finishDrag()
+                            goalSortQueue.flush()
+                        }
+                    }
+                    goalSort.order.value.forEach { id -> key(id) {
+                        val goal = goalsById[id]
                         if (goal != null) {
-                            SortCard(goal.title, Money.format(goal.target), goal.id, goalOrder,
-                                pageScrollState, viewportTop, viewportHeight, goalDrag,
-                                onCommit = { ids ->
-                                    commitSortOrder(goals.map { it.id }, { store.reorderGoals(ids) }) {
-                                        goalOrder.value = it
-                                    }
-                                })
+                            SortCard(goal.title, Money.format(goal.target), goal.id, goalSort.order,
+                                pageScrollState, viewportTop, viewportHeight, goalSort.drag,
+                                onPersist = { ids -> saveManualSort(goalSort, true, ids) })
                         }
                     } }
                 }
                 7 -> {
-                    val accountOrder = remember(accounts) { mutableStateOf(accounts.map { it.id }) }
-                    val accountDrag = remember { SortDragState() }
-                    accountOrder.value.forEach { id -> key(id) {
-                        val account = accounts.firstOrNull { it.id == id }
+                    DisposableEffect(accountSortQueue, accountSort) {
+                        onDispose {
+                            accountSort.finishDrag()
+                            accountSortQueue.flush()
+                        }
+                    }
+                    accountSort.order.value.forEach { id -> key(id) {
+                        val account = accountsById[id]
                         if (account != null) {
-                            SortCard(account.name, Money.format(account.balance), account.id, accountOrder,
-                                pageScrollState, viewportTop, viewportHeight, accountDrag,
-                                onCommit = { ids ->
-                                    commitSortOrder(accounts.map { it.id }, { store.reorderAccounts(ids) }) {
-                                        accountOrder.value = it
-                                    }
-                                })
+                            SortCard(account.name, Money.format(account.balance), account.id, accountSort.order,
+                                pageScrollState, viewportTop, viewportHeight, accountSort.drag,
+                                onPersist = { ids -> saveManualSort(accountSort, false, ids) })
                         }
                     } }
                 }
@@ -1726,7 +1872,15 @@ private fun SavingsApp(
                         scope.launch {
                             backupBusy = true
                             try {
-                                withContext(Dispatchers.IO) { store.importBackup(backup) }
+                                invalidateSortUndo()
+                                goalSortQueue.flush()
+                                accountSortQueue.flush()
+                                sortCommitLock.withLock {
+                                    withContext(Dispatchers.IO) { store.importBackup(backup) }
+                                    goalSortQueue.revision++
+                                    accountSortQueue.revision++
+                                }
+                                sortDataVersion++
                                 iosBarBlurRadius = store.iosBarBlurRadius()
                                 hitokoto = backup.hitokoto
                                 quoteChoice = backup.quoteEnabled
@@ -2205,6 +2359,66 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
 }
 
 /**
+ * Coalesces reorder writes so a sorting session persists the final order once instead of on every
+ * drop. Leaving the page flushes the pending write, so a drop is never lost to cancellation.
+ */
+private class SortWriteQueue(private val scope: CoroutineScope, private val delayMillis: Long = 400L) {
+    var revision = 0
+    private var job: Job? = null
+    private var pending: (suspend () -> Unit)? = null
+
+    fun submit(write: suspend () -> Unit) {
+        pending = write
+        job?.cancel()
+        job = scope.launch {
+            delay(delayMillis)
+            // Clear the handle instead of cancelling: this coroutine has to run the write itself.
+            job = null
+            val work = pending
+            pending = null
+            work?.invoke()
+        }
+    }
+
+    /** Runs the pending write immediately on page exit. */
+    fun flush() {
+        take()?.let { work -> scope.launch { work() } }
+    }
+
+    /** Invalidates a delayed write when a newer explicit operation takes ownership. */
+    fun cancel() {
+        pending = null
+        job?.cancel()
+        job = null
+    }
+
+    private fun take(): (suspend () -> Unit)? {
+        val work = pending ?: return null
+        pending = null
+        job?.cancel()
+        job = null
+        return work
+    }
+}
+
+private data class SortSnapshot(val order: List<String>, val settings: SortSettings)
+
+private class SortPageState(ids: List<String>, initialSettings: SortSettings) {
+    val order = mutableStateOf(ids)
+    val settings = mutableStateOf(initialSettings)
+    val drag = SortDragState()
+
+    fun snapshot() = SortSnapshot(
+        if (drag.settling) drag.move(order.value) ?: order.value else order.value,
+        settings.value,
+    )
+
+    fun finishDrag() {
+        if (drag.settling) drag.finish(order) else drag.clear()
+    }
+}
+
+/**
  * Shared by every card in one sortable page. The backing list is not reordered while a drag is
  * in progress; only these values change, and one final move is committed after the drop.
  */
@@ -2217,6 +2431,8 @@ private class SortDragState {
     var scrollY by mutableFloatStateOf(0f)
     var stride by mutableFloatStateOf(0f)
     var settling by mutableStateOf(false)
+        private set
+    var settleFraction by mutableFloatStateOf(0f)
 
     val active: Boolean get() = draggedId != null
     val distance: Float get() = pointerY - startY + scrollY
@@ -2254,15 +2470,36 @@ private class SortDragState {
         pointerY = 0f
         scrollY = 0f
         settling = false
+        settleFraction = 0f
+    }
+
+    fun move(list: List<String>): List<String>? {
+        if (list.getOrNull(startIndex) != draggedId || targetIndex !in list.indices || startIndex == targetIndex) return null
+        return list.toMutableList().apply { add(targetIndex, removeAt(startIndex)) }
+    }
+
+    fun finish(order: MutableState<List<String>>) {
+        move(order.value)?.let { order.value = it }
+        clear()
     }
 }
 
 @Composable private fun SortCard(
     title: String, amount: String, id: String, order: MutableState<List<String>>, scrollState: ScrollState,
-    viewportTop: Float, viewportHeight: Float, drag: SortDragState, onCommit: (List<String>) -> Unit,
+    viewportTop: Float, viewportHeight: Float, drag: SortDragState,
+    onPersist: (List<String>) -> Unit,
 ) {
     val color = MiuixTheme.colorScheme.onSurfaceVariantActions
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val cornerRadius = CardDefaults.CornerRadius
+    val cornerRadiusPx = with(density) { cornerRadius.toPx() }
+    val squircleEnabled = isSquircleEnabled()
+    val cardShape = remember(cornerRadiusPx, squircleEnabled) {
+        GenericShape { size, _ ->
+            addSquircleRect(size.width, size.height, cornerRadiusPx, squircleEnabled = squircleEnabled)
+        }
+    }
+    val haptics = LocalHapticFeedback.current
     var rowHeight by remember { mutableFloatStateOf(64f) }
     var handleCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
     val index = order.value.indexOf(id)
@@ -2270,10 +2507,19 @@ private class SortDragState {
     val stride = rowHeight + with(density) { 12.dp.toPx() }
     val isDragged = drag.draggedId == id
     val dragActive = isDragged && drag.active
-    val currentOnCommit by rememberUpdatedState(onCommit)
+    val currentOnPersist by rememberUpdatedState(onPersist)
     // Committing a drop replaces the order state instance. pointerInput keeps its original
     // coroutine, so read the latest instance instead of the one captured at first composition.
     val currentOrder by rememberUpdatedState(order)
+
+    // Picking a card up gets the heavier tick; every slot it crosses gets a light one.
+    LaunchedEffect(dragActive, drag.targetIndex) {
+        if (!dragActive) return@LaunchedEffect
+        haptics.performHapticFeedback(
+            if (drag.targetIndex == drag.startIndex) HapticFeedbackType.LongPress
+            else HapticFeedbackType.TextHandleMove
+        )
+    }
 
     // Other cards slide one slot while the list itself keeps its current order.
     val shiftTarget = when {
@@ -2285,39 +2531,17 @@ private class SortDragState {
     val animatedShift by animateFloatAsState(shiftTarget,
         animationSpec = if (drag.active) tween(140) else snap(), label = "sortShift")
 
-    // The dragged card follows the finger. It stops at the first or last slot, so it cannot be
-    // pulled into the empty space above or below the list.
-    val slotOffset = (drag.targetIndex - drag.startIndex) * stride
-    val followTarget = when {
-        dragActive && !drag.settling ->
-            drag.distance.coerceIn(-drag.startIndex * stride, (lastIndex - drag.startIndex) * stride)
-        dragActive -> slotOffset
-        else -> 0f
-    }
-    val follow by animateFloatAsState(followTarget,
-        animationSpec = when {
-            dragActive && !drag.settling -> snap()
-            drag.active -> tween(170)
-            else -> snap()
-        }, label = "sortFollow")
-    val lift by animateFloatAsState(if (dragActive) 1f else 0f,
-        animationSpec = tween(160), label = "sortLift")
-
-    // Animate the card onto its target slot first, then swap the list and clear the visual
-    // offsets in the same frame. The layout jump equals the offset that has just reached zero.
-    LaunchedEffect(drag.settling, dragActive) {
+    LaunchedEffect(dragActive, drag.settling) {
         if (dragActive && drag.settling) {
-            delay(200)
-            val from = drag.startIndex
-            val to = drag.targetIndex
-            if (from in currentOrder.value.indices && to in currentOrder.value.indices && from != to) {
-                val next = currentOrder.value.toMutableList().apply { add(to, removeAt(from)) }
-                currentOrder.value = next
-                currentOnCommit(next)
+            animate(0f, 1f, animationSpec = tween(170)) { fraction, _ ->
+                drag.settleFraction = fraction
             }
-            drag.clear()
+            // Rebase all cards onto the new layout together, on actual animation completion.
+            if (drag.draggedId == id && drag.settling) drag.finish(currentOrder)
         }
     }
+    val lift by animateFloatAsState(if (dragActive && !drag.settling) 1f else 0f,
+        animationSpec = tween(160), label = "sortLift")
 
     val reorder: (Int) -> Boolean = { step ->
         val list = currentOrder.value
@@ -2326,8 +2550,21 @@ private class SortDragState {
         if (drag.active || from !in list.indices || to !in list.indices) false else {
             val next = list.toMutableList().apply { add(to, removeAt(from)) }
             currentOrder.value = next
-            currentOnCommit(next)
+            currentOnPersist(next)
             true
+        }
+    }
+    val reorderTo: (Int) -> Boolean = { target ->
+        val list = currentOrder.value
+        val from = list.indexOf(id)
+        if (drag.active || from !in list.indices) false else {
+            val to = target.coerceIn(0, list.lastIndex)
+            if (to == from) false else {
+                val next = list.toMutableList().apply { add(to, removeAt(from)) }
+                currentOrder.value = next
+                currentOnPersist(next)
+                true
+            }
         }
     }
     val edge = with(density) { 64.dp.toPx() }
@@ -2336,9 +2573,16 @@ private class SortDragState {
         drag.pointerY > viewportTop + viewportHeight - edge -> 1
         else -> 0
     } else 0
+    // The deeper the finger sits inside the edge band, the faster the list scrolls: dragging a
+    // long list a screen or two would otherwise feel stuck at one speed.
     LaunchedEffect(direction, scrollState) {
-        while (direction != 0) {
-            val scrolled = scrollState.scrollBy(direction * with(density) { 10.dp.toPx() })
+        while (direction != 0 && drag.draggedId == id && !drag.settling) {
+            val depth = if (direction < 0)
+                ((viewportTop + edge - drag.pointerY) / edge).coerceIn(0f, 1f)
+            else
+                ((drag.pointerY - (viewportTop + viewportHeight - edge)) / edge).coerceIn(0f, 1f)
+            val step = with(density) { (10f + 18f * depth).dp.toPx() }
+            val scrolled = scrollState.scrollBy(direction * step)
             if (scrolled == 0f) break
             drag.scrollY += scrolled
             drag.updateTarget(currentOrder.value.lastIndex)
@@ -2348,16 +2592,28 @@ private class SortDragState {
 
     Card(Modifier.fillMaxWidth().zIndex(when {
         dragActive -> 2f
-        animatedShift != 0f -> 1f
+        shiftTarget != 0f -> 1f
         else -> 0f
     })
         .onSizeChanged { rowHeight = it.height.toFloat() }
         .graphicsLayer {
-            translationY = animatedShift + follow
+            translationY = when {
+                drag.draggedId == id -> {
+                    val dragStride = drag.stride
+                    val from = drag.distance.coerceIn(
+                        -drag.startIndex * dragStride, (lastIndex - drag.startIndex) * dragStride,
+                    )
+                    val to = (drag.targetIndex - drag.startIndex) * dragStride
+                    from + (to - from) * drag.settleFraction
+                }
+                drag.active -> animatedShift
+                else -> 0f
+            }
             scaleX = 1f + .015f * lift
             scaleY = 1f + .015f * lift
+            shape = cardShape
             shadowElevation = with(density) { 8.dp.toPx() } * lift
-        }) {
+        }, cornerRadius = cornerRadius) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Text(title, modifier = Modifier.weight(1f), maxLines = 1,
@@ -2370,27 +2626,18 @@ private class SortDragState {
             Box(Modifier.size(48.dp).onGloballyPositioned { handleCoordinates = it }
                 .semantics {
                     contentDescription = tr("sort.drag_handle", title)
+                    stateDescription = tr("sort.position_of", index.coerceAtLeast(0) + 1, order.value.size)
                     customActions = listOf(
                         CustomAccessibilityAction(tr("common.move_up")) { reorder(-1) },
                         CustomAccessibilityAction(tr("common.move_down")) { reorder(1) },
+                        CustomAccessibilityAction(tr("sort.move_top")) { reorderTo(0) },
+                        CustomAccessibilityAction(tr("sort.move_bottom")) { reorderTo(order.value.lastIndex) },
                     )
                 }
                 .pointerInput(id) {
                     detectDragGestures(
                         onDragStart = { local ->
-                            // A release animation lasts a few frames. If another gesture starts
-                            // before it ends, commit the previous drop before taking over.
-                            if (drag.settling) {
-                                val from = drag.startIndex
-                                val to = drag.targetIndex
-                                if (from in currentOrder.value.indices &&
-                                    to in currentOrder.value.indices && from != to) {
-                                    val next = currentOrder.value.toMutableList().apply { add(to, removeAt(from)) }
-                                    currentOrder.value = next
-                                    currentOnCommit(next)
-                                }
-                                drag.clear()
-                            }
+                            if (drag.settling) drag.finish(currentOrder)
                             val from = currentOrder.value.indexOf(id)
                             if (from >= 0) {
                                 val start = handleCoordinates?.takeIf { it.isAttached }
@@ -2399,7 +2646,10 @@ private class SortDragState {
                             }
                         },
                         onDragEnd = {
-                            if (drag.draggedId == id) drag.end()
+                            if (drag.draggedId == id) {
+                                drag.move(currentOrder.value)?.let { currentOnPersist(it) }
+                                drag.end()
+                            }
                         },
                         onDragCancel = {
                             if (drag.draggedId == id) drag.clear()

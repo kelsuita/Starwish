@@ -1,8 +1,15 @@
 package com.kelsuita.starswish.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+
+data class SortSettings(
+    val criterion: Int = -1,
+    val descending: Boolean = false,
+    val manualOrder: List<String>? = null,
+)
 
 /** One private preference file. Writes update memory immediately and flush to disk asynchronously. */
 class SavingsStore(context: Context) {
@@ -150,6 +157,7 @@ class SavingsStore(context: Context) {
             .putBoolean("banner_all_goals", value.bannerAllGoals)
             .putBoolean("goal_links_v2", true)
             .putInt("language_v2", backup.language)
+            .remove("goal_sort").remove("account_sort")
             .remove("capture").remove("candidate")
         // WebDAV credentials and connection state stay on this device.
         backup.developerMode?.let { editor.putBoolean("developer_mode", it) }
@@ -233,18 +241,36 @@ class SavingsStore(context: Context) {
         put("goals", JSONArray().apply { migrated.forEach { put(goalJson(it)) } }.toString())
         prefs.edit().putBoolean("goal_links_v2", true).apply()
     }
-    @Synchronized fun reorderGoals(ids: List<String>) {
+    fun sortSettings(goals: Boolean): SortSettings = runCatching {
+        val json = JSONObject(prefs.getString(sortKey(goals), "{}") ?: "{}")
+        val order = json.optJSONArray("manualOrder")
+        SortSettings(json.optInt("criterion", -1), json.optBoolean("descending"),
+            order?.let { array -> List(array.length()) { array.getString(it) } })
+    }.getOrDefault(SortSettings())
+
+    @Synchronized fun reorderGoals(ids: List<String>, settings: SortSettings) {
         val current = goals()
         require(ids.size == current.size && ids.toSet().size == ids.size && ids.toSet() == current.map { it.id }.toSet())
         val byId = current.associateBy { it.id }
-        put("goals", JSONArray().apply { ids.forEach { put(goalJson(byId.getValue(it))) } }.toString())
+        prefs.edit().putString("goals", JSONArray().apply {
+            ids.forEach { put(goalJson(byId.getValue(it))) }
+        }.toString()).writeSortSettings(true, settings).apply()
     }
-    @Synchronized fun reorderAccounts(ids: List<String>) {
+    @Synchronized fun reorderAccounts(ids: List<String>, settings: SortSettings) {
         val current = accounts()
         require(ids.size == current.size && ids.toSet().size == ids.size && ids.toSet() == current.map { it.id }.toSet())
         val byId = current.associateBy { it.id }
-        writeAccounts(ids.map { byId.getValue(it) })
+        prefs.edit().putString("accounts", accountsJson(ids.map { byId.getValue(it) }).toString())
+            .writeSortSettings(false, settings).apply()
     }
+
+    private fun sortKey(goals: Boolean) = if (goals) "goal_sort" else "account_sort"
+
+    private fun SharedPreferences.Editor.writeSortSettings(goals: Boolean, settings: SortSettings) =
+        putString(sortKey(goals), JSONObject()
+            .put("criterion", settings.criterion)
+            .put("descending", settings.descending)
+            .put("manualOrder", settings.manualOrder?.let { JSONArray(it) }).toString())
     @Synchronized fun deleteGoal(id: String) {
         val remaining = goals().filterNot { it.id == id }
         val editor = prefs.edit()

@@ -120,8 +120,8 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 24
-        versionName = "Aventurine 2.1.0"
+        versionCode = 25
+        versionName = "Robin 2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     splits {
