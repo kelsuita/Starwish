@@ -34,7 +34,7 @@ background sync, no transaction history is read, and nothing is confirmed on you
 
 ## Download
 
-Current release: [Starwish Aventurine 2.1.0](https://github.com/kelsuita/starswish/releases/tag/v2.1.0)
+Current release: [Starwish Robin 2.2.0](https://github.com/kelsuita/starswish/releases/tag/v2.2.0)
 
 - `app-universal-release.apk`: universal package, choose this if you are unsure about the ABI
 - `app-armeabi-v7a-release.apk`: 32-bit ARM devices
@@ -48,6 +48,19 @@ Current release: [Starwish Aventurine 2.1.0](https://github.com/kelsuita/starswi
 
 Future releases will keep using the same release key, so release builds can be upgraded in place.
 Do not lose or replace that key — Android will refuse to install a new version as an update otherwise.
+
+## What's new in Robin 2.2.0
+
+2.2.0 is a housekeeping release about one thing: sorting that behaves the way you expect.
+
+- **Rebuilt drag-to-reorder:** dropping a card now persists the order immediately, so leaving the page or switching tabs can no longer quietly revert it
+- The order stays put while balances refresh in the background instead of jumping back mid-drag
+- Chinese names sort by pinyin, matching how the system orders contacts, instead of by raw character code
+- Name, time, price, progress, remaining amount and deadline sorting for wishes; name, time, balance and linked-wish count for accounts
+- Reversing is now part of the criterion itself: the active row shows an arrow, and tapping it again flips the direction
+- Undo after every sort, so a wrong tap is one press away from being undone
+- Haptics when picking a card up and when it crosses a slot, faster auto-scroll near the edges, and drag actions for screen readers
+- A hand-made order is kept as its own choice, so you can go back to it after trying a criterion sort
 
 ## What's new in Sparkle 2.0.0
 
