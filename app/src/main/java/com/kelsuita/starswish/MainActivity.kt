@@ -142,6 +142,7 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.kelsuita.starswish.data.*
 import com.kelsuita.starswish.ui.LocalStockPalette
 import com.kelsuita.starswish.ui.isDarkScheme
+import com.kelsuita.starswish.ui.primaryButtonColors
 import com.kelsuita.starswish.ui.primaryTextButtonColors
 import com.kelsuita.starswish.data.fetchHitokoto
 import com.kelsuita.starswish.sync.XiaoxingAccessibilityService
@@ -1308,13 +1309,13 @@ private fun SavingsApp(
                                     disclosure = true
                                 }
                             }, modifier = Modifier.fillMaxWidth(),
-                                colors = if (enabled) ButtonDefaults.buttonColorsPrimary()
+                                colors = if (enabled) primaryButtonColors()
                                 else ButtonDefaults.buttonColors()) {
                                 Text(if (enabled) tr("accessibility.disable_service") else tr("accessibility.set_up_permission"))
                             }
                         } else {
                             Button(onClick = { beginWebDavRead() }, modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColorsPrimary(), enabled = !webDavBusy) {
+                                colors = primaryButtonColors(), enabled = !webDavBusy) {
                                 Text(tr("webdav.button"))
                             }
                             if (webDavConnected) {
@@ -2070,6 +2071,9 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
 
 @Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, compact: Boolean, decimals: Int) {
     val color = MiuixTheme.colorScheme.primary
+    // On the stock palette in dark mode the card accent moves to the container tint so the bar and
+    // the percentage read as accents on the dark surface instead of the heavier primary.
+    val accentColor = if (LocalStockPalette.current && isDarkScheme()) MiuixTheme.colorScheme.primaryContainer else color
     val progress by animateFloatAsState(goal.progress(accounts), tween(650), label = "goal-progress")
     val saved = goal.saved(accounts)
     val percentLabel = formatBannerPercent(goal.progress(accounts), decimals)
@@ -2090,14 +2094,13 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 Text(tr("goal.target_amount_line", Money.format(goal.target)), style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-            Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold,
-                color = if (LocalStockPalette.current && isDarkScheme()) MiuixTheme.colorScheme.primaryContainer else color)
+            Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, color = accentColor)
         }
         // The bar reports its range itself, so the description only has to name the goal and the
         // exact percentage, including the decimals the user picked.
         LinearProgressIndicator(progress = progress, height = 8.dp,
             modifier = Modifier.semantics { contentDescription = tr("home.progress_percent", percentLabel) },
-            colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = color, backgroundColor = MiuixTheme.colorScheme.secondaryContainer))
+            colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = accentColor, backgroundColor = MiuixTheme.colorScheme.secondaryContainer))
         if (!compact) Text(if (saved >= goal.target) tr("home.goal_completed_celebration") else tr("home.remaining_amount_encourage", Money.format(goal.remaining(accounts))),
             style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         if (!compact && goal.deadline.isNotBlank()) {
@@ -2711,7 +2714,7 @@ private class SortDragState {
             Text(title, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
             Text(body, style = MiuixTheme.textStyles.body2, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            Button(onClick = onClick, colors = ButtonDefaults.buttonColorsPrimary()) { Text(action) }
+            Button(onClick = onClick, colors = primaryButtonColors()) { Text(action) }
         }
     }
 }
