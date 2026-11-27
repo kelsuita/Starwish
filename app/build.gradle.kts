@@ -120,8 +120,8 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 31
-        versionName = "Trailblazer - The Harmony 2.2.5 -G2"
+        versionCode = 32
+        versionName = "Firefly 2.3.0 -G2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     splits {
