@@ -5,8 +5,8 @@ package com.kelsuita.starswish.data
  *
  * Linking adds the account to the wish; a "start from now" wish also takes a snapshot of the
  * balance the account joins with, so its already-accumulated part is not credited retroactively.
- * Unlinking removes the account and the snapshot it brought, and never empties a wish: the caller
- * keeps the last link ticked and disabled.
+ * Unlinking removes the account and the snapshot it brought; a wish may end up with no account at
+ * all, which the card shows as 「没有关联账户」.
  */
 fun linkAccountToGoals(
     account: BankAccount,
