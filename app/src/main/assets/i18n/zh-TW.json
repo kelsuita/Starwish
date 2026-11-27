@@ -210,6 +210,8 @@
   "settings.language_save_failed": "語言設定儲存失敗",
   "settings.predictive_back": "預測性返回手勢",
   "settings.predictive_back_summary": "使用系統的預測性返回動畫",
+    "settings.collapse_card_actions": "收合卡片按鈕",
+    "settings.collapse_card_actions_summary": "把「更新餘額」「編輯」「刪除」收進心願卡右上角的三點選單",
   "settings.quote_enable": "啟用一言",
   "settings.quote_loading": "一言載入中…",
   "settings.quote_summary": "中文玩家特調",

@@ -98,7 +98,8 @@ class SavingsStore(context: Context) {
         prefs.getInt("floating_nav_bar_style", 0).coerceIn(0, 1),
         prefs.getBoolean("predictive_back_enabled", true),
         prefs.getInt("banner_decimals", 0).coerceIn(0, 5),
-        prefs.getBoolean("banner_all_goals", false)
+        prefs.getBoolean("banner_all_goals", false),
+        prefs.getBoolean("collapse_card_actions", false)
     )
     fun saveAppearance(value: Appearance) {
         require(value.themeMode in 0..2 && value.accentIndex in 0..5 && value.bannerStyle in 0..1 &&
@@ -114,6 +115,7 @@ class SavingsStore(context: Context) {
             .putBoolean("pure_black_background", value.pureBlackBackground)
             .putBoolean("floating_nav_bar", value.floatingNavBar)
             .putInt("floating_nav_bar_style", value.floatingNavBarStyle)
+            .putBoolean("collapse_card_actions", value.collapseCardActions)
             .putBoolean("predictive_back_enabled", value.predictiveBackEnabled)
             .putInt("banner_decimals", value.bannerDecimals)
             .putBoolean("banner_all_goals", value.bannerAllGoals).apply()
@@ -153,6 +155,7 @@ class SavingsStore(context: Context) {
             .putBoolean("predictive_back_enabled", value.predictiveBackEnabled)
             .putInt("banner_decimals", value.bannerDecimals)
             .putBoolean("banner_all_goals", value.bannerAllGoals)
+            .putBoolean("collapse_card_actions", value.collapseCardActions)
             .putBoolean("goal_links_v2", true)
             .putInt("language_v2", backup.language)
             .remove("goal_sort").remove("account_sort")

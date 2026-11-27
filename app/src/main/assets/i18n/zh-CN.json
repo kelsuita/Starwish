@@ -210,6 +210,8 @@
   "settings.language_save_failed": "语言设置保存失败",
   "settings.predictive_back": "预测性返回手势",
   "settings.predictive_back_summary": "使用系统的预测性返回动画",
+    "settings.collapse_card_actions": "收起卡片按钮",
+    "settings.collapse_card_actions_summary": "把「更新余额」「编辑」「删除」收进心愿卡右上角的三点菜单",
   "settings.quote_enable": "启用一言",
   "settings.quote_loading": "一言加载中…",
   "settings.quote_summary": "中文玩家特调",

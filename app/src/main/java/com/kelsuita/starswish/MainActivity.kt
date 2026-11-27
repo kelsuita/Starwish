@@ -1262,6 +1262,7 @@ private fun SavingsApp(
                             onEdit = { editingGoalId = goal.id; goalEditor = true },
                             onDelete = { deletingGoal = goal; deletingGoalVisible = true },
                             onSync = { updateGoalBalances(goal) },
+                            collapseActions = appearance.collapseCardActions,
                             decimals = appearance.bannerDecimals)
                     }
                     if (goalGrid) {
@@ -1336,6 +1337,16 @@ private fun SavingsApp(
                         editingAccountId = null; accountEditor = true
                     }
                     val accountCard: @Composable (BankAccount) -> Unit = { account ->
+                        // 读取小星余额 / 编辑 / 删除 live here in both layouts; the corner menu only
+                        // decides whether they are rendered inline or folded away.
+                        val readBalance = {
+                            if (webDavActive) {
+                                if (webDavConnected) {
+                                    notify(tr("webdav.reading_toast"))
+                                    readWebDav(listOf(account.id))
+                                } else beginWebDavRead(listOf(account.id))
+                            } else capture(account)
+                        }
                         Panel {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 IconTile("bank")
@@ -1344,25 +1355,30 @@ private fun SavingsApp(
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(tr(account.source), style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
+                                if (appearance.collapseCardActions) {
+                                    OverlayIconDropdownMenu(
+                                        entry = DropdownEntry(listOf(
+                                            DropdownItem(tr("accessibility.read_balance"), onClick = readBalance),
+                                            DropdownItem(tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true }),
+                                            DropdownItem(tr("common.delete"), onClick = { deletingAccount = account; deletingAccountVisible = true }),
+                                        )),
+                                    ) { Icon(MiuixIcons.More, contentDescription = tr("account.menu"), modifier = Modifier.size(20.dp)) }
+                                }
                             }
                             Text("¥ ${Money.format(account.balance)}", style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
                             Text(tr("account.updated_at", timeLabel(account.updatedAt)), style = MiuixTheme.textStyles.footnote1,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                            // The read action names the source page, so it is longer than the other two
-                            // in every language: give it a full row and share the second row.
-                            TextButton(text = tr("accessibility.read_balance"), onClick = {
-                                if (webDavActive) {
-                                    if (webDavConnected) {
-                                        notify(tr("webdav.reading_toast"))
-                                        readWebDav(listOf(account.id))
-                                    } else beginWebDavRead(listOf(account.id))
-                                } else capture(account)
-                            }, modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TextButton(text = tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true },
-                                    modifier = Modifier.weight(1f))
-                                TextButton(text = tr("common.delete"), onClick = { deletingAccount = account; deletingAccountVisible = true },
-                                    modifier = Modifier.weight(1f))
+                            if (!appearance.collapseCardActions) {
+                                // The read action names the source page, so it is longer than the other
+                                // two in every language: give it a full row and share the second row.
+                                TextButton(text = tr("accessibility.read_balance"), onClick = readBalance,
+                                    modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    TextButton(text = tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true },
+                                        modifier = Modifier.weight(1f))
+                                    TextButton(text = tr("common.delete"), onClick = { deletingAccount = account; deletingAccountVisible = true },
+                                        modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -1522,6 +1538,9 @@ private fun SavingsApp(
                                         featuredGoalId = if (value >= 2) goals[value - 2].id else ""))
                                 }
                             })
+                        SwitchPreference(title = tr("settings.collapse_card_actions"), summary = tr("settings.collapse_card_actions_summary"),
+                            checked = appearance.collapseCardActions,
+                            onCheckedChange = { value -> mutate { store.saveAppearance(store.appearance().copy(collapseCardActions = value)) } })
                         SwitchPreference(title = tr("settings.predictive_back"), summary = tr("settings.predictive_back_summary"),
                             checked = appearance.predictiveBackEnabled,
                             onCheckedChange = { value -> mutate { store.saveAppearance(store.appearance().copy(predictiveBackEnabled = value)) } })
@@ -2065,7 +2084,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     }
 }
 
-@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, decimals: Int) {
+@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, collapseActions: Boolean, decimals: Int) {
     val color = MiuixTheme.colorScheme.primary
     // On the stock palette in dark mode the card accent moves to the container tint so the bar and
     // the percentage read as accents on the dark surface instead of the heavier primary.
@@ -2082,7 +2101,21 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 Text(if (goal.mode == GoalMode.BALANCE) tr("goal.mode_balance") else tr("goal.count_from_creation"),
                     style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-            StatusPill(if (saved >= goal.target) tr("goal.completed") else tr("goal.in_progress"))
+            // Collapsed cards hand the corner to the menu, so the in-progress chip steps aside;
+            // the achievement chip is still worth showing next to it.
+            if (!collapseActions || saved >= goal.target) {
+                StatusPill(if (saved >= goal.target) tr("goal.completed") else tr("goal.in_progress"))
+            }
+            if (collapseActions) {
+                OverlayIconDropdownMenu(
+                    entry = DropdownEntry(listOf(
+                        DropdownItem(tr("account.update_balance"), onClick = onSync),
+                        DropdownItem(tr("common.edit"), onClick = onEdit),
+                        DropdownItem(tr("common.delete"), onClick = onDelete),
+                    )),
+                    modifier = Modifier.padding(start = 4.dp),
+                ) { Icon(MiuixIcons.More, contentDescription = tr("goal.menu"), modifier = Modifier.size(20.dp)) }
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -2097,11 +2130,13 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         LinearProgressIndicator(progress = progress, height = 8.dp,
             modifier = Modifier.semantics { contentDescription = tr("home.progress_percent", percentLabel) },
             colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = accentColor, backgroundColor = MiuixTheme.colorScheme.secondaryContainer))
-        TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
-            colors = primaryTextButtonColors())
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
-            TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))
+        if (!collapseActions) {
+            TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
+                colors = primaryTextButtonColors())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
+                TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

@@ -210,6 +210,8 @@
   "settings.language_save_failed": "Saving the language failed.",
   "settings.predictive_back": "Predictive back gestures",
   "settings.predictive_back_summary": "Use the system predictive-back animation",
+    "settings.collapse_card_actions": "Compact card menu",
+    "settings.collapse_card_actions_summary": "Move update / edit / delete into a menu in each wish card corner",
   "settings.quote_enable": "Enable quote",
   "settings.quote_loading": "Loading quote…",
   "settings.quote_summary": "Tuned for Chinese readers",
