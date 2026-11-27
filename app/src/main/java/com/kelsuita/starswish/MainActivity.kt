@@ -1352,7 +1352,7 @@ private fun SavingsApp(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 IconTile("bank")
                                 Column(Modifier.weight(1f)) {
-                                    Text(account.name, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, maxLines = 1,
+                                    Text(account.name, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold, maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(tr(account.source), style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
@@ -2097,7 +2097,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             IconTile("star")
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(goal.title, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, maxLines = 1,
+                Text(goal.title, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(if (goal.mode == GoalMode.BALANCE) tr("goal.mode_balance") else tr("goal.count_from_creation"),
                     style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
