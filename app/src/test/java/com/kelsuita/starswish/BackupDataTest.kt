@@ -74,6 +74,23 @@ class BackupDataTest {
         assertFalse(BackupData.fromJson(json).appearance.collapseCardActions)
     }
 
+    /** 珍藏馆 state rides along: a wish stays archived with the day it was reached. */
+    @Test fun vaultStateSurvivesExportAndImport() {
+        val original = backup().copy(goals = backup().goals.map {
+            it.copy(archived = true, archivedAt = 1764200000000L)
+        })
+        assertEquals(original, BackupData.fromJson(original.toJson()))
+
+        // A backup written before the vault existed has neither field and still imports.
+        val older = backup().toJson()
+            .replace(Regex(""",\s*"archivedAt"\s*:\s*0"""), "")
+            .replace(Regex(""",\s*"archived"\s*:\s*false"""), "")
+        assertFalse(older.contains("archived"))
+        val decoded = BackupData.fromJson(older).goals.single()
+        assertFalse(decoded.archived)
+        assertEquals(0L, decoded.archivedAt)
+    }
+
     @Test fun oldBackupMayOmitNewSettings() {
         val json = backup().toJson().replace(
             Regex(""",\s*"(?:developerMode|webDavBalanceEnabled|iosBarBlurRadius)"\s*:\s*null"""), "",
