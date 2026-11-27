@@ -2015,10 +2015,25 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         else -> tr("home.all_wishes")
     }
     val status = appearance.bannerStyle == 0
-    val foreground = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
+    // On the stock palette the light banner is the soft one: onPrimaryVariant is the spec's pale
+    // blue (#AECDFF light, #99C7F1 dark), which needs onBackground content instead of white.
+    val softBanner = status && LocalStockPalette.current
+    val foreground = when {
+        softBanner -> MiuixTheme.colorScheme.onBackground
+        status -> MiuixTheme.colorScheme.onPrimaryContainer
+        else -> MiuixTheme.colorScheme.onPrimary
+    }
     val subtle = foreground.copy(alpha = if (status) .7f else .82f)
-    val base = if (status) MiuixTheme.colorScheme.primaryContainer else accent
-    val fill = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
+    val base = when {
+        softBanner -> MiuixTheme.colorScheme.onPrimaryVariant
+        status -> MiuixTheme.colorScheme.primaryContainer
+        else -> accent
+    }
+    val fill = when {
+        softBanner -> MiuixTheme.colorScheme.primary
+        status -> MiuixTheme.colorScheme.onPrimaryContainer
+        else -> MiuixTheme.colorScheme.onPrimary
+    }
     G2Card(
         modifier = Modifier.fillMaxWidth()
             .clearAndSetSemantics { contentDescription = tr("home.banner_description", title, if (completed) tr("home.completed") else percentText) },
