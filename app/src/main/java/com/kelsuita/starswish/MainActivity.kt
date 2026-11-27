@@ -2454,7 +2454,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         val editableGoals = goals.filter { !it.archived }
         if (existing != null && editableGoals.isNotEmpty()) {
             SmallTitle(text = tr("account.linked_goals"), insideMargin = SectionTitlePadding)
-            Note(tr("account.linked_goals_note"))
             G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                 editableGoals.forEach { goal ->
                     val isLinked = goal.id in linkedGoalIds
@@ -2468,6 +2467,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                     )
                 }
             }
+            Note(tr("account.linked_goals_note"))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             G2TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
