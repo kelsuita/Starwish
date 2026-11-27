@@ -20,7 +20,7 @@ Starwish はお金には触れません。「いくら貯めたいか、あと�
 
 ## ダウンロード
 
-現在のリリース：[Starwish Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/Starwish/releases/tag/v2.2.5)
+現在のリリース：[Starwish Firefly 2.3.0](https://github.com/kelsuita/Starwish/releases/tag/v2.3.0)
 
 - `app-universal-release.apk`：汎用パッケージ。端末のアーキテクチャが不明な場合はこれを選択
 - `app-armeabi-v7a-release.apk`：32 ビット ARM 端末
