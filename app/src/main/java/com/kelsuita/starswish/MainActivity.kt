@@ -2000,7 +2000,13 @@ private fun SavingsApp(
                     accountEditor = true
                 }
             },
-            onSave = { if (mutate { store.saveGoal(it) }) goalEditor = false },
+            onSave = { goal ->
+                if (mutate { store.saveGoal(goal) }) {
+                    goalEditor = false
+                    // Saving without an account is allowed, but the read action needs one.
+                    if (goal.accountIds.isEmpty()) notify(tr("goal.no_accounts_notice"))
+                }
+            },
             onAddAccount = { openAccountAfterGoal = true; goalEditor = false },
         )
     }
