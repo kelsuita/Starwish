@@ -1285,12 +1285,12 @@ private fun SavingsApp(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             IconTile("link")
                             Column(Modifier.weight(1f)) {
-                                Text(tr("app.xiaoxing"), style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
+                                Text(tr("app.xiaoxing"), style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold)
                                 Text(when {
                                     webDavActive -> tr("account.webdav_read_summary")
                                     enabled -> tr("accessibility.read_enabled")
                                     else -> tr("accessibility.enable_read_summary")
-                                }, style = MiuixTheme.textStyles.footnote1,
+                                }, style = MiuixTheme.textStyles.footnote2,
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
                             StatusPill(when {
@@ -1354,7 +1354,7 @@ private fun SavingsApp(
                                 Column(Modifier.weight(1f)) {
                                     Text(account.name, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold, maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                    Text(tr(account.source), style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    Text(tr(account.source), style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
                                 if (appearance.collapseCardActions) {
                                     OverlayIconDropdownMenu(
@@ -2100,7 +2100,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 Text(goal.title, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(if (goal.mode == GoalMode.BALANCE) tr("goal.mode_balance") else tr("goal.count_from_creation"),
-                    style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
             // Collapsed cards hand the corner to the menu, so the in-progress chip steps aside;
             // the achievement chip is still worth showing next to it.
