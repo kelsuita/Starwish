@@ -161,6 +161,13 @@ android {
 }
 
 dependencies {
+    // miuix-squircle is vendored into this module (app/src/main/java/top/yukonga/miuix/kmp/squircle)
+    // so its SquircleDefaults.Extension default can be raised from 1.1f to 1.5f; every Miuix surface
+    // that uses the default corner tile then draws the same G2 continuous corner the cards do.
+    configurations.configureEach {
+        exclude(group = "top.yukonga.miuix.kmp", module = "miuix-squircle-android")
+        exclude(group = "top.yukonga.miuix.kmp", module = "miuix-squircle")
+    }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("net.lingala.zip4j:zip4j:2.11.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
