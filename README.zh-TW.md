@@ -6,7 +6,7 @@
 
 一個用 Kotlin + Jetpack Compose 寫的 Android 存錢目標應用程式。介面基於 **MIUIX 0.9.4**，參考了 HyperOS 的設定頁與大標題互動：整頁橫向切換、上滑折疊標題、跟隨強調色推導的完整色板，以及可選的背景模糊。
 
-[下載安裝](https://github.com/kelsuita/starswish/releases/latest) · [回報問題](https://github.com/kelsuita/starswish/issues) · [愛發電贊助](https://afdian.com/a/kelsuita)
+[下載安裝](https://github.com/kelsuita/Starwish/releases/latest) · [回報問題](https://github.com/kelsuita/Starwish/issues) · [愛發電贊助](https://afdian.com/a/kelsuita)
 
 ## 簡介
 
@@ -20,7 +20,7 @@
 
 ## 下載
 
-目前發布版本：[星願 Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/starswish/releases/tag/v2.2.5)
+目前發布版本：[星願 Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/Starwish/releases/tag/v2.2.5)
 
 - `app-universal-release.apk`：通用架構包，不確定裝置架構時選擇此包
 - `app-armeabi-v7a-release.apk`：32 位元 ARM 裝置
@@ -192,7 +192,7 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-universal-relea
 ## 專案結構
 
 ```text
-app/src/main/java/com/kelsuita/starswish/
+app/src/main/java/com/kelsuita/Starwish/
   MainActivity.kt                      Compose 頁面、編輯互動與系統入口
   data/Models.kt                       金額、帳戶、目標與進度計算
   data/SavingsStore.kt                  原子本機持久化、候選餘額與確認

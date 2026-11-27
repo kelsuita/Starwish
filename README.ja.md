@@ -6,7 +6,7 @@
 
 Kotlin + Jetpack Compose で作られた Android の貯蓄目標アプリです。UI は **MIUIX 0.9.4** をベースに、HyperOS の設定画面とラージタイトルの操作感を参考にしています。ページ全体の横スワイプ、スクロールで折りたたまれるタイトル、アクセントカラーから導出されるフルカラーパレット、任意の背景ぼかしなどを備えています。
 
-[ダウンロード](https://github.com/kelsuita/starswish/releases/latest) · [問題を報告](https://github.com/kelsuita/starswish/issues) · [愛発電で支援](https://afdian.com/a/kelsuita)
+[ダウンロード](https://github.com/kelsuita/Starwish/releases/latest) · [問題を報告](https://github.com/kelsuita/Starwish/issues) · [愛発電で支援](https://afdian.com/a/kelsuita)
 
 ## はじめに
 
@@ -20,7 +20,7 @@ Starwish はお金には触れません。「いくら貯めたいか、あと�
 
 ## ダウンロード
 
-現在のリリース：[Starwish Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/starswish/releases/tag/v2.2.5)
+現在のリリース：[Starwish Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/Starwish/releases/tag/v2.2.5)
 
 - `app-universal-release.apk`：汎用パッケージ。端末のアーキテクチャが不明な場合はこれを選択
 - `app-armeabi-v7a-release.apk`：32 ビット ARM 端末
@@ -192,7 +192,7 @@ Build Tools ディレクトリを `PATH` に追加するか、フルパスを使
 ## プロジェクト構成
 
 ```text
-app/src/main/java/com/kelsuita/starswish/
+app/src/main/java/com/kelsuita/Starwish/
   MainActivity.kt                      Compose 画面、編集インタラクション、システム入口
   data/Models.kt                       金額、口座、目標、進捗計算
   data/SavingsStore.kt                 アトミックなローカル永続化、候補残高と確認

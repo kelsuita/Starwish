@@ -9,8 +9,8 @@ An Android savings-goal app built with Kotlin and Jetpack Compose. The interface
 horizontal paging, a title that collapses while scrolling, a full color scheme derived from the
 accent color, and optional background blur.
 
-[Download](https://github.com/kelsuita/starswish/releases/latest) ·
-[Issues](https://github.com/kelsuita/starswish/issues) ·
+[Download](https://github.com/kelsuita/Starwish/releases/latest) ·
+[Issues](https://github.com/kelsuita/Starwish/issues) ·
 [Donate on Afdian](https://afdian.com/a/kelsuita)
 
 ## Introduction
@@ -34,7 +34,7 @@ background sync, no transaction history is read, and nothing is confirmed on you
 
 ## Download
 
-Current release: [Starwish Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/starswish/releases/tag/v2.2.5)
+Current release: [Starwish Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/Starwish/releases/tag/v2.2.5)
 
 - `app-universal-release.apk`: universal package, choose this if you are unsure about the ABI
 - `app-armeabi-v7a-release.apk`: 32-bit ARM devices
@@ -247,7 +247,7 @@ secure backup of the key and passwords.
 ## Project structure
 
 ```text
-app/src/main/java/com/kelsuita/starswish/
+app/src/main/java/com/kelsuita/Starwish/
   MainActivity.kt                      Compose pages, editors and system entry points
   data/Models.kt                       Amounts, accounts, goals and progress math
   data/SavingsStore.kt                 Atomic local persistence, candidate balance and confirmation
