@@ -2441,7 +2441,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         onDismiss = onDismiss,
         onDismissFinished = onDismissFinished,
     ) {
-        Note(tr("account.name_hint_detail"))
         TextField(value = name, onValueChange = { name = it.take(40); nameError = "" }, label = tr("account.name_placeholder"), singleLine = true,
             colors = dialogFieldColors(nameError.isNotEmpty()))
         FieldError(nameError)
