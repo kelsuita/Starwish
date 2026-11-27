@@ -602,6 +602,7 @@ private fun SavingsApp(
                 2 -> wishes.sortedBy { it.target }
                 3 -> wishes.sortedByDescending { it.progress(accounts) }
                 4 -> wishes.sortedBy { it.remaining(accounts) }
+                6 -> wishes.sortedBy { it.archivedAt }
                 else -> wishes.sortedWith(compareBy<SavingGoal> { it.deadline.isEmpty() }.thenBy { it.deadline })
             }.map { it.id }
         } else {
@@ -1162,13 +1163,21 @@ private fun SavingsApp(
                         val sortingGoals = displayedPage == 6 || displayedPage == 10
                         val (criterion, descending, manualOrder) =
                             (if (sortingGoals) goalSort else accountSort).settings.value
-                        val criteria = if (sortingGoals) listOf(
-                            tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
-                            tr("sort.progress") to 3, tr("sort.remaining") to 4, tr("sort.deadline") to 5,
-                        ) else listOf(
-                            tr("sort.name") to 0, tr("sort.time") to 1,
-                            tr("sort.balance") to 2, tr("sort.links") to 3,
-                        )
+                        val criteria = when {
+                            // Vault cards are always complete, and 剩余金额 says nothing there.
+                            displayedPage == 10 -> listOf(
+                                tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
+                                tr("sort.deadline") to 5, tr("sort.achieved") to 6,
+                            )
+                            sortingGoals -> listOf(
+                                tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
+                                tr("sort.progress") to 3, tr("sort.remaining") to 4, tr("sort.deadline") to 5,
+                            )
+                            else -> listOf(
+                                tr("sort.name") to 0, tr("sort.time") to 1,
+                                tr("sort.balance") to 2, tr("sort.links") to 3,
+                            )
+                        }
                         // The menu fits seven rows, so direction is shown on the active criterion
                         // (tap it again to flip) instead of costing an eighth row.
                         val sortEntry = DropdownEntry(criteria.map { (label, index) ->
