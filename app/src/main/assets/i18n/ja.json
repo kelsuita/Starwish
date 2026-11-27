@@ -49,6 +49,7 @@
   "account.add_savings": "貯蓄口座を追加",
   "account.cny_only_note": "人民元の貯蓄口座のみ対応しています。クレジット枠は貯蓄として扱いません。",
     "account.linked_goals": "関連する願い",
+    "account.balance_blank_notice": "残高が未入力のため、新しい口座を0に設定しました",
     "account.linked_goals_note": "チェックすると、この口座がその願いの進み具合に数えられます。「今から貯める」願いは上の残高を起点にします。",
   "account.current_cny_balance": "現在の人民元残高（元）",
   "account.delete_linked_message": "「%s」を削除します。目標がこの口座をリンクしている場合は、先に目標を編集してリンクを解除してください。",
