@@ -2010,7 +2010,13 @@ private fun SavingsApp(
             existing = editingAccount,
             onDismiss = { accountEditor = false },
             onDismissFinished = { editingAccountId = null; finished() },
-            onSave = { if (mutate { store.saveAccount(it) }) accountEditor = false },
+            goals = goals,
+            onSave = { account, updatedGoals ->
+                if (mutate {
+                        store.saveAccount(account)
+                        updatedGoals.forEach { store.saveGoal(it) }
+                    }) accountEditor = false
+            },
         )
     }
     DialogHost(disclosure) { finished ->
@@ -2400,14 +2406,21 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
 @Composable private fun AccountEditor(
     show: Boolean,
     existing: BankAccount?,
+    goals: List<SavingGoal>,
     onDismiss: () -> Unit,
     onDismissFinished: () -> Unit,
-    onSave: (BankAccount) -> Unit,
+    onSave: (BankAccount, List<SavingGoal>) -> Unit,
 ) {
     var name by rememberSaveable(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var balance by rememberSaveable(existing?.id) { mutableStateOf(existing?.let { Money.input(it.balance) }.orEmpty()) }
     var nameError by remember { mutableStateOf("") }
     var balanceError by remember { mutableStateOf("") }
+    // Which wishes this account takes part in, kept as a draft until 保存 is pressed.
+    var linkedGoalIds by remember(existing?.id) {
+        mutableStateOf(existing?.let { account ->
+            goals.filter { account.id in it.accountIds }.map { it.id }.toSet()
+        } ?: emptySet())
+    }
     AppDialog(
         show = show,
         title = if (existing == null) tr("account.add_savings") else tr("account.edit"),
@@ -2423,17 +2436,44 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             colors = dialogFieldColors(balanceError.isNotEmpty()))
         FieldError(balanceError)
         Note(tr("account.cny_only_note"))
+        // Existing accounts can be linked from either side; the wish editor shows the mirror
+        // image of this list. Archived wishes are left out: they are no longer editable.
+        val editableGoals = goals.filter { !it.archived }
+        if (existing != null && editableGoals.isNotEmpty()) {
+            SmallTitle(text = tr("account.linked_goals"), insideMargin = SectionTitlePadding)
+            Note(tr("account.linked_goals_note"))
+            Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+                editableGoals.forEach { goal ->
+                    val isLinked = goal.id in linkedGoalIds
+                    // A wish needs at least one account, so its last link cannot be dropped.
+                    val lastLink = isLinked && goal.accountIds.size == 1
+                    CheckboxPreference(
+                        title = goal.title,
+                        summary = if (lastLink) tr("account.only_goal_link")
+                            else tr("goal.target_amount_line", Money.format(goal.target)),
+                        checked = isLinked,
+                        enabled = !lastLink,
+                        onCheckedChange = { checked ->
+                            linkedGoalIds = if (checked) linkedGoalIds + goal.id else linkedGoalIds - goal.id
+                        },
+                    )
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
             TextButton(text = tr("account.save"), onClick = {
-                val cents = Money.parse(balance)
+                // An empty balance means zero: an account can be created before its first
+                // reading, and clearing the field should not block saving.
+                val cents = if (balance.isBlank()) 0L else Money.parse(balance)
                 nameError = if (name.isBlank()) tr("account.error_name_required") else ""
                 balanceError = if (cents == null) tr("account.error_invalid_balance") else ""
                 if (nameError.isEmpty() && balanceError.isEmpty() && cents != null) {
                     val balanceChanged = existing == null || cents != existing.balance
-                    onSave(BankAccount(existing?.id ?: UUID.randomUUID().toString(), name.trim(), cents,
+                    val account = BankAccount(existing?.id ?: UUID.randomUUID().toString(), name.trim(), cents,
                         if (balanceChanged) System.currentTimeMillis() else existing.updatedAt,
-                        if (balanceChanged) "account.source_manual" else existing.source))
+                        if (balanceChanged) "account.source_manual" else existing.source)
+                    onSave(account, linkAccountToGoals(account, goals, linkedGoalIds))
                 }
             }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
         }
