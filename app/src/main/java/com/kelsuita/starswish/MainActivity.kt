@@ -1607,7 +1607,7 @@ private fun SavingsApp(
                 }
                 3 -> {
                     Panel {
-                        Box(Modifier.squircleClip(cornerRadius = 15.dp).clickable {
+                        Box(Modifier.squircleClip(cornerRadius = 10.dp).clickable {
                             aboutIconTaps++
                             if (aboutIconTaps >= 10 && !store.developerModeEnabled()) {
                                 aboutIconTaps = 0
@@ -2671,7 +2671,9 @@ private class SortDragState {
     }
 }
 @Composable private fun IconTile(kind: String) {
-    Box(Modifier.size(44.dp).squircleSurface(color = MiuixTheme.colorScheme.primaryContainer, cornerRadius = 15.dp),
+    // 44dp tile with a 10dp radius: the squircle tile (10dp × 1.5) stays well under half the side,
+    // so it reads as a G2 rounded square instead of clamping into a circle.
+    Box(Modifier.size(44.dp).squircleSurface(color = MiuixTheme.colorScheme.primaryContainer, cornerRadius = 10.dp),
         contentAlignment = Alignment.Center) {
         Symbol(kind, MiuixTheme.colorScheme.onPrimaryContainer, Modifier.size(24.dp))
     }
