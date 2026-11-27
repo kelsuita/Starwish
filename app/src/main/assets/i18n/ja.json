@@ -129,6 +129,7 @@
   "common.undo": "元に戻す",
   "format.title_dot_detail": "%s · %s",
   "goal.achieved": "目標達成",
+    "goal.achieved_on": "達成日：%s",
   "goal.calc_help_balance": "現在の残高：リンクされた口座の合計です。\n今から開始：その合計から、目標作成時に記録した開始残高を差し引いた額です。残高が減ると進捗も減り、0%を下回ることはありません。",
   "goal.calculation_mode": "進捗の計算方法",
   "goal.completed": "達成",

@@ -129,6 +129,7 @@
   "common.undo": "Undo",
   "format.title_dot_detail": "%s · %s",
   "goal.achieved": "Goal reached",
+    "goal.achieved_on": "Reached on %s",
   "goal.calc_help_balance": "Current balance: the sum of the linked accounts.\nStart from now: that sum minus the starting balance recorded when the goal was created. If the balances drop, progress drops too and never shows below 0%.",
   "goal.calculation_mode": "How progress is calculated",
   "goal.completed": "Reached",

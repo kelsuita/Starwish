@@ -2055,7 +2055,9 @@ private fun SavingsApp(
                     TextButton(text = tr("common.cancel"), onClick = { archivingVisible = false },
                         modifier = Modifier.weight(1f))
                     TextButton(text = tr("goal.cheer"), onClick = {
-                        if (mutate { store.saveGoal(goal.copy(archived = true)) }) {
+                        if (mutate {
+                                store.saveGoal(goal.copy(archived = true, archivedAt = System.currentTimeMillis()))
+                            }) {
                             archivingVisible = false
                             // WebDAV mode re-reads every account, so the remaining cards show what
                             // the finished wish actually took out of them.
@@ -2079,7 +2081,9 @@ private fun SavingsApp(
                     TextButton(text = tr("common.cancel"), onClick = { removingVisible = false },
                         modifier = Modifier.weight(1f))
                     TextButton(text = tr("vault.remove_title"), onClick = {
-                        if (mutate { store.saveGoal(goal.copy(archived = false)) }) removingVisible = false
+                        if (mutate { store.saveGoal(goal.copy(archived = false, archivedAt = 0L)) }) {
+                            removingVisible = false
+                        }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
                 }
             }
@@ -2236,8 +2240,12 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(goal.title, style = MiuixTheme.textStyles.title4.copy(fontSize = 19.sp), fontWeight = FontWeight.Bold, maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text(if (goal.mode == GoalMode.BALANCE) tr("goal.mode_balance") else tr("goal.count_from_creation"),
-                    style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text(when {
+                    // A vault card reports when it got there instead of how it is measured.
+                    archived && goal.archivedAt > 0L -> tr("goal.achieved_on", achievedDate(goal.archivedAt))
+                    goal.mode == GoalMode.BALANCE -> tr("goal.mode_balance")
+                    else -> tr("goal.count_from_creation")
+                }, style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
             // Collapsed cards hand the corner to the menu, so the in-progress chip steps aside;
             // the achievement chip is still worth showing next to it.
@@ -2928,3 +2936,15 @@ private class SortDragState {
     }
 }
 private fun timeLabel(millis: Long): String = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(millis))
+
+/** Achievement day shown on a vault card, written the way the current language writes dates. */
+private fun achievedDate(millis: Long): String {
+    val pack = Languages.current.pack
+    val pattern = when (pack) {
+        "zh-CN", "zh-TW" -> "yyyy年MM月dd日"
+        "ja" -> "yyyy年M月d日"
+        else -> "MMM d, yyyy"
+    }
+    val locale = if (pack.isEmpty()) Locale.getDefault() else Locale.forLanguageTag(pack)
+    return SimpleDateFormat(pattern, locale).format(Date(millis))
+}

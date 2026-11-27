@@ -129,6 +129,7 @@
   "common.undo": "撤销",
   "format.title_dot_detail": "%s · %s",
   "goal.achieved": "目标已达成",
+    "goal.achieved_on": "达成时间：%s",
   "goal.calc_help_balance": "「当前余额」：关联账户的余额合计。\n「从现在开始攒」：余额合计减去创建目标时的起始余额。若余额减少，进度也会减少；最低显示为 0%。",
   "goal.calculation_mode": "进度计算方式",
   "goal.completed": "已达成",
