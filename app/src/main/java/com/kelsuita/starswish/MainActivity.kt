@@ -322,6 +322,7 @@ private fun SavingsApp(
     // A sorting session can produce several drops; writes are coalesced and flushed on page exit.
     val goalSortQueue = remember { SortWriteQueue(scope) }
     val accountSortQueue = remember { SortWriteQueue(scope) }
+    val vaultSortQueue = remember { SortWriteQueue(scope) }
     var navigationJob by remember { mutableStateOf<Job?>(null) }
     val selectedTab = pagerState.targetPage
     // Compact/medium/expanded breakpoints follow the Miuix adaptive shell: phones keep the
@@ -483,6 +484,12 @@ private fun SavingsApp(
     }
     val goalsById = remember(storedGoals) { storedGoals.associateBy { it.id } }
     val accountsById = remember(storedAccounts) { storedAccounts.associateBy { it.id } }
+    // The vault keeps the same global goal order; this view only shows the archived slice, so a
+    // drag inside it is written back into the full order at the slots those wishes occupy.
+    val vaultIds = remember(goalsById, goalSort.order.value) {
+        goalSort.order.value.filter { goalsById[it]?.archived == true }
+    }
+    val vaultSort = remember(vaultIds, sortDataVersion) { SortPageState(vaultIds, SortSettings()) }
     val goals = remember(goalsById, goalSort.order.value) { goalSort.order.value.mapNotNull(goalsById::get) }
     val accounts = remember(accountsById, accountSort.order.value) { accountSort.order.value.mapNotNull(accountsById::get) }
     val developerMode = remember(revision) { store.developerModeEnabled() }
@@ -963,6 +970,7 @@ private fun SavingsApp(
         6 -> 0
         7 -> 1
         9 -> 0
+        10 -> 0
         else -> 2
     } else selectedTab
     Row(Modifier.fillMaxSize()) {
@@ -1110,13 +1118,13 @@ private fun SavingsApp(
                     colors = BlurDefaults.blurColors(blendColors = listOf(BlendColorEntry(pageBackground.copy(alpha = .8f))))) else Modifier)
                 .background(if (backdrop != null) Color.Transparent else pageBackground)) {
                 TopAppBar(
-                    title = when (displayedPage) { 0 -> tr("app.name"); 1 -> tr("account.title"); 2 -> tr("settings.title"); 4 -> tr("theme.title"); 5 -> tr("settings.import_export"); 6 -> tr("sort.goals_title"); 7 -> tr("sort.accounts_title"); 8 -> tr("settings.developer_options"); 9 -> tr("vault.title"); else -> tr("about.title") },
+                    title = when (displayedPage) { 0 -> tr("app.name"); 1 -> tr("account.title"); 2 -> tr("settings.title"); 4 -> tr("theme.title"); 5 -> tr("settings.import_export"); 6 -> tr("sort.goals_title"); 7 -> tr("sort.accounts_title"); 8 -> tr("settings.developer_options"); 9 -> tr("vault.title"); 10 -> tr("vault.sort_title"); else -> tr("about.title") },
                     subtitle = "",
                     color = barColor,
                     scrollBehavior = contentScrollBehavior,
                     titlePadding = barTitlePadding,
                     bottomContent = {
-                        if (displayedPage == 1 || displayedPage == 2) {
+                        if (displayedPage == 1 || displayedPage == 2 || displayedPage == 9) {
                             // Unlike TopAppBar.subtitle, this caption does not reappear below the small title.
                             // On wide windows the bar spans the whole pane, so centre the caption on the
                             // same 880dp column as the cards to keep its left edge aligned with them.
@@ -1130,9 +1138,12 @@ private fun SavingsApp(
                                         layout(placeable.width, visibleHeight) { placeable.placeRelative(0, 0) }
                                     }.clipToBounds()) {
                                         val side = if (wideLayout) barTitlePadding else TopAppBarDefaults.TitlePadding
-                                        val caption = if (displayedPage == 2 && quoteShown) {
-                                            if (quoteLoading) tr("settings.quote_loading") else hitokoto ?: tr("settings.quote_loading")
-                                        } else null
+                                        val caption = when {
+                                            displayedPage == 9 -> if (goals.none { it.archived }) tr("vault.empty") else null
+                                            displayedPage == 2 && quoteShown ->
+                                                if (quoteLoading) tr("settings.quote_loading") else hitokoto ?: tr("settings.quote_loading")
+                                            else -> null
+                                        }
                                         if (caption != null) Text(caption,
                                             modifier = Modifier.fillMaxWidth()
                                                 .then(if (displayedPage == 2) Modifier.clickable(enabled = !quoteLoading) {
@@ -1147,8 +1158,8 @@ private fun SavingsApp(
                         }
                     },
                 actions = {
-                    if (displayedPage == 6 || displayedPage == 7) {
-                        val sortingGoals = displayedPage == 6
+                    if (displayedPage == 6 || displayedPage == 7 || displayedPage == 10) {
+                        val sortingGoals = displayedPage == 6 || displayedPage == 10
                         val (criterion, descending, manualOrder) =
                             (if (sortingGoals) goalSort else accountSort).settings.value
                         val criteria = if (sortingGoals) listOf(
@@ -1182,13 +1193,14 @@ private fun SavingsApp(
                     }
                     if (displayedPage == 9) {
                         OverlayIconDropdownMenu(entry = DropdownEntry(listOf(
-                            DropdownItem(tr("sort.title"), onClick = { navigate(6) }),
+                            DropdownItem(tr("sort.title"), onClick = { navigate(10) }),
                         ))) { Icon(MiuixIcons.More, contentDescription = tr("vault.menu"), modifier = Modifier.size(24.dp)) }
                     }
                 },
                 navigationIcon = {
                     if (displayedPage >= 3) IconButton(onClick = { popRoute() }) {
                         Icon(MiuixIcons.Back, contentDescription = if (displayedPage == 6 || displayedPage == 9) tr("common.back_to_goals")
+        else if (displayedPage == 10) tr("vault.back")
                             else if (displayedPage == 7) tr("common.back_to_accounts") else tr("common.back_to_settings"))
                     }
                 })
@@ -1296,11 +1308,9 @@ private fun SavingsApp(
                 }
                 9 -> {
                     val vaultGoals = goals.filter { it.archived }
-                    if (vaultGoals.isEmpty()) {
-                        // A section caption like the settings page's quote row, but it is not
-                        // clickable: it only tells the user the vault is still waiting.
-                        SmallTitle(tr("vault.empty"), insideMargin = SectionTitlePadding)
-                    } else {
+                    // While the vault is empty the caption sits under the large title (it is
+                    // drawn by the top bar); the body then stays blank.
+                    if (vaultGoals.isNotEmpty()) {
                         val vaultCard: @Composable (SavingGoal) -> Unit = { goal ->
                             GoalCard(goal, accounts,
                                 onEdit = { removingGoal = goal; removingVisible = true },
@@ -1321,6 +1331,34 @@ private fun SavingsApp(
                             vaultGoals.forEach { goal -> vaultCard(goal) }
                         }
                     }
+                }
+                10 -> {
+                    DisposableEffect(vaultSortQueue, vaultSort) {
+                        onDispose {
+                            vaultSort.finishDrag()
+                            vaultSortQueue.flush()
+                        }
+                    }
+                    vaultSort.order.value.forEach { id -> key(id) {
+                        val goal = goalsById[id]
+                        if (goal != null) {
+                            SortCard(goal.title, Money.format(goal.target), goal.id, vaultSort.order,
+                                pageScrollState, viewportTop, viewportHeight, vaultSort.drag,
+                                onPersist = { ids ->
+                                    // Keep the active wishes where they are and only rewrite the
+                                    // slots the archived ones already hold.
+                                    val merged = ArrayList<String>(goalSort.order.value.size)
+                                    var cursor = 0
+                                    goalSort.order.value.forEach { current ->
+                                        if (goalsById[current]?.archived == true) {
+                                            merged += ids.getOrNull(cursor) ?: current
+                                            cursor++
+                                        } else merged += current
+                                    }
+                                    saveManualSort(goalSort, true, merged)
+                                })
+                        }
+                    } }
                 }
                 1 -> {
                     captureStatus()
@@ -2233,7 +2271,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 completed -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.weight(1f),
                         colors = primaryTextButtonColors())
-                    G2TextButton(text = tr("goal.bittersweet"), onClick = onArchive, modifier = Modifier.weight(1f))
+                    G2TextButton(text = tr("goal.bittersweet"), onClick = onArchive, modifier = Modifier.weight(1f),
+                        colors = primaryTextButtonColors())
                 }
                 else -> G2TextButton(text = tr("account.update_balance"), onClick = onSync,
                     modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
