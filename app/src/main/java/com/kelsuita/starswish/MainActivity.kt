@@ -2257,9 +2257,9 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                     else -> tr("goal.count_from_creation")
                 }, style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-            // Collapsed cards hand the corner to the menu, so the in-progress chip steps aside;
-            // the achievement chip is still worth showing next to it.
-            if (!collapseActions || completed) {
+            // Collapsed cards hand the corner to the menu and drop the chip entirely, 已达成
+            // included: the vault is what marks a finished wish there.
+            if (!collapseActions) {
                 StatusPill(if (completed || archived) tr("goal.completed") else tr("goal.in_progress"))
             }
             if (collapseActions) {
