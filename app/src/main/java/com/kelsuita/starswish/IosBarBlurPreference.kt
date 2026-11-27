@@ -20,6 +20,7 @@ import com.kelsuita.starswish.data.IOS_BAR_BLUR_MAX_PX
 import com.kelsuita.starswish.data.tr
 import com.kelsuita.starswish.ui.G2Button
 import com.kelsuita.starswish.ui.G2TextButton
+import com.kelsuita.starswish.ui.primaryTextButtonColors
 import com.kelsuita.starswish.ui.G2Card
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -111,7 +112,7 @@ internal fun IosBarBlurPreference(
                     showDialog = false
                 },
                 modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary(),
+                colors = primaryTextButtonColors(),
             )
         }
     }

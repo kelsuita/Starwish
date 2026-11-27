@@ -162,6 +162,9 @@ import top.yukonga.miuix.kmp.basic.*
 import com.kelsuita.starswish.ui.G2Card
 import com.kelsuita.starswish.ui.G2Button
 import com.kelsuita.starswish.ui.G2TextButton
+import com.kelsuita.starswish.ui.LocalStockPalette
+import com.kelsuita.starswish.ui.isDarkScheme
+import com.kelsuita.starswish.ui.primaryTextButtonColors
 import com.kelsuita.starswish.ui.cardCornerShape
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
@@ -1210,7 +1213,7 @@ private fun SavingsApp(
                             modifier = Modifier.weight(1f))
                         G2TextButton(text = tr("accessibility.confirm_sync"), onClick = { acceptCapturedBalance() },
                             enabled = account != null, modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary())
+                            colors = primaryTextButtonColors())
                     }
                 }
             }
@@ -1355,7 +1358,7 @@ private fun SavingsApp(
                                         readWebDav(listOf(account.id))
                                     } else beginWebDavRead(listOf(account.id))
                                 } else capture(account)
-                            }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColorsPrimary())
+                            }, modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 G2TextButton(text = tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true },
                                     modifier = Modifier.weight(1f))
@@ -1880,7 +1883,7 @@ private fun SavingsApp(
                             } finally { backupBusy = false }
                         }
                     }, enabled = !backupBusy, modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary())
+                        colors = primaryTextButtonColors())
                 }
             }
         }
@@ -1929,7 +1932,7 @@ private fun SavingsApp(
                 G2TextButton(text = tr("accessibility.learn_and_open_settings"), onClick = {
                     disclosure = false
                     openReaderSettings()
-                }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColorsPrimary())
+                }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
             }
         }
     }
@@ -2088,7 +2091,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 Text(tr("goal.target_amount_line", Money.format(goal.target)), style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
-            Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, color = color)
+            Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold,
+                color = if (LocalStockPalette.current && isDarkScheme()) MiuixTheme.colorScheme.primaryContainer else color)
         }
         // The bar reports its range itself, so the description only has to name the goal and the
         // exact percentage, including the decimals the user picked.
@@ -2112,7 +2116,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         if (!compact) Text(linked.joinToString(" · ") { it.name }, style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         if (!compact && goal.mode == GoalMode.GROWTH) Note(tr("goal.starting_balance", Money.format(goal.baseline)))
         G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.textButtonColorsPrimary())
+            colors = primaryTextButtonColors())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             G2TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
             G2TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))
@@ -2224,7 +2228,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         existing?.colorIndex ?: 0, links = links))
                 }
             }, enabled = accounts.isNotEmpty(), modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary())
+                colors = primaryTextButtonColors())
         }
     }
 }
@@ -2267,7 +2271,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         if (balanceChanged) System.currentTimeMillis() else existing.updatedAt,
                         if (balanceChanged) "account.source_manual" else existing.source))
                 }
-            }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColorsPrimary())
+            }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
         }
     }
 }
@@ -2672,11 +2676,6 @@ private class SortDragState {
  * spec's light accent wash and [onTertiaryContainer] its accent-coloured text (light #EAF2FF on
  * #3482FF, dark #2B3B54 on #4788FF) — a soft tint with accent content, not a heavy filled block.
  */
-/**
- * True while the stock accent palette is active. The soft chip tint is only applied there; a
- * wallpaper or fixed accent keeps the primary container pair it was generated with.
- */
-private val LocalStockPalette = staticCompositionLocalOf { true }
 
 @Composable private fun statusChipBackground(): Color =
     if (LocalStockPalette.current) MiuixTheme.colorScheme.tertiaryContainer
