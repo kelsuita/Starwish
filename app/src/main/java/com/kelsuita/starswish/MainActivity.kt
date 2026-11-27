@@ -2250,7 +2250,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 // meaningful action should not sit under the routine ones.
                 val actions = buildList {
                     if (!archived && completed) add(DropdownItem(tr("goal.bittersweet"), onClick = onArchive))
-                    if (!archived) add(DropdownItem(tr("account.update_balance"), onClick = onSync))
+                    if (!archived) add(DropdownItem(tr("account.update_balance"), onClick = onSync,
+                        enabled = goal.accountIds.isNotEmpty()))
                     add(DropdownItem(tr("common.edit"), onClick = onEdit))
                     add(DropdownItem(tr("common.delete"), onClick = onDelete))
                 }
@@ -2263,7 +2264,11 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("¥ ${Money.format(saved)}", style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
-                Text(tr("goal.target_amount_line", Money.format(goal.target)), style = MiuixTheme.textStyles.footnote1,
+                // Without an account there is no target to compare against, so the line explains
+                // the missing link instead of showing an amount nothing feeds.
+                Text(if (goal.accountIds.isEmpty()) tr("goal.no_accounts")
+                        else tr("goal.target_amount_line", Money.format(goal.target)),
+                    style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
             Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, color = accentColor)
@@ -2285,7 +2290,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         colors = primaryTextButtonColors())
                 }
                 else -> G2TextButton(text = tr("account.update_balance"), onClick = onSync,
-                    modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
+                    modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors(),
+                    enabled = goal.accountIds.isNotEmpty())
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 G2TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
@@ -2312,7 +2318,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     var titleError by remember { mutableStateOf("") }
     var amountError by remember { mutableStateOf("") }
     var dateError by remember { mutableStateOf("") }
-    var accountError by remember { mutableStateOf("") }
     AppDialog(
         show = show,
         title = if (existing == null) tr("goal.new_wish") else tr("goal.edit_wish"),
@@ -2344,13 +2349,11 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         checked = account.id in selected,
                         onCheckedChange = { isChecked ->
                             selected = if (isChecked) selected + account.id else selected - account.id
-                            accountError = ""
                         },
                     )
                 }
             }
         }
-        FieldError(accountError)
         SmallTitle(text = tr("goal.calculation_mode"), insideMargin = SectionTitlePadding)
         G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
             RadioButtonPreference(
@@ -2373,7 +2376,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                 val parsedDate = if (date.isBlank()) null else runCatching { LocalDate.parse(date) }.getOrNull()
                 titleError = if (title.isBlank()) tr("goal.name_empty_error") else ""
                 amountError = if (target == null || target <= 0) tr("goal.error_invalid_amount") else ""
-                accountError = if (selected.isEmpty()) tr("goal.error_account_required") else ""
                 dateError = when {
                     date.isNotBlank() && (parsedDate == null || parsedDate.toString() != date) ->
                         tr("goal.error_date_format")
@@ -2381,7 +2383,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         tr("goal.error_past_date")
                     else -> ""
                 }
-                if (titleError.isEmpty() && amountError.isEmpty() && accountError.isEmpty() &&
+                if (titleError.isEmpty() && amountError.isEmpty() &&
                     dateError.isEmpty() && target != null) {
                     val mode = if (growth) GoalMode.GROWTH else GoalMode.BALANCE
                     // "Start from now" snapshots each account on its own, so adding an account to an
@@ -2446,14 +2448,10 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                 editableGoals.forEach { goal ->
                     val isLinked = goal.id in linkedGoalIds
-                    // A wish needs at least one account, so its last link cannot be dropped.
-                    val lastLink = isLinked && goal.accountIds.size == 1
                     CheckboxPreference(
                         title = goal.title,
-                        summary = if (lastLink) tr("account.only_goal_link")
-                            else tr("goal.target_amount_line", Money.format(goal.target)),
+                        summary = tr("goal.target_amount_line", Money.format(goal.target)),
                         checked = isLinked,
-                        enabled = !lastLink,
                         onCheckedChange = { checked ->
                             linkedGoalIds = if (checked) linkedGoalIds + goal.id else linkedGoalIds - goal.id
                         },

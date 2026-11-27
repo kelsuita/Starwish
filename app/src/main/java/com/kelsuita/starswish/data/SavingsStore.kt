@@ -217,7 +217,7 @@ class SavingsStore(context: Context) {
     }
     @Synchronized fun saveGoal(goal: SavingGoal) {
         require(goal.title.isNotBlank() && goal.title.length <= 40)
-        require(goal.target in 1..Money.MAX_CENTS && goal.accountIds.isNotEmpty())
+        require(goal.target in 1..Money.MAX_CENTS)
         require(goal.accountIds.all { id -> accounts().any { it.id == id } })
         val existing = goals()
         require(existing.any { it.id == goal.id } || existing.size < 100) { tr("goal.error_max_goals") }
