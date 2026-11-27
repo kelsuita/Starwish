@@ -165,6 +165,15 @@ fun Modifier.squircleSurface(
 }
 
 /**
+ * Corner tile used by the absolute (physical-corner) variants only.
+ *
+ * Those variants exist to clip a page to the *device's own screen corner* while a nav transition
+ * runs. Stretching the tile there over-rounds the clip so it no longer follows the physical panel,
+ * so they keep Miuix's stock 1.1 tile instead of the app-wide 1.5.
+ */
+private const val PANEL_CORNER_EXTENSION = 1.1f
+
+/**
  * Absolute-positioning variant of [squircleBackground]. Corner parameters are physical
  * (clockwise from top-left) and are NOT flipped by `LocalLayoutDirection` — mirrors
  * `AbsoluteRoundedCornerShape`. Reach for this when corners are anchored to physical sides
@@ -185,7 +194,7 @@ fun Modifier.absoluteSquircleBackground(
     topRight: Dp,
     bottomRight: Dp,
     bottomLeft: Dp,
-    extension: Float = SquircleDefaults.Extension,
+    extension: Float = PANEL_CORNER_EXTENSION,
 ): Modifier {
     val brush = rememberSquircleBrush(color, topLeft, topRight, bottomRight, bottomLeft, extension)
         ?: return this.background(
@@ -211,7 +220,7 @@ fun Modifier.absoluteSquircleClip(
     topRight: Dp,
     bottomRight: Dp,
     bottomLeft: Dp,
-    extension: Float = SquircleDefaults.Extension,
+    extension: Float = PANEL_CORNER_EXTENSION,
 ): Modifier {
     val brush = rememberSquircleBrush(Color.White, topLeft, topRight, bottomRight, bottomLeft, extension)
         ?: return this.clip(AbsoluteRoundedCornerShape(topLeft, topRight, bottomRight, bottomLeft))
@@ -236,7 +245,7 @@ fun Modifier.absoluteSquircleSurface(
     topRight: Dp,
     bottomRight: Dp,
     bottomLeft: Dp,
-    extension: Float = SquircleDefaults.Extension,
+    extension: Float = PANEL_CORNER_EXTENSION,
 ): Modifier {
     val brush = rememberSquircleBrush(Color.White, topLeft, topRight, bottomRight, bottomLeft, extension)
         ?: return this
