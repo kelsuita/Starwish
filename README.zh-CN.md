@@ -20,7 +20,7 @@
 
 ## 下载
 
-当前发布版本：[星愿 Robin 2.2.0](https://github.com/kelsuita/starswish/releases/tag/v2.2.0)
+当前发布版本：[星愿 Trailblazer - The Harmony 2.2.5](https://github.com/kelsuita/starswish/releases/tag/v2.2.5)
 
 - `app-universal-release.apk`：通用架构包，不确定设备架构时选择此包
 - `app-armeabi-v7a-release.apk`：32 位 ARM 设备
