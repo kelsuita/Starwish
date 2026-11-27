@@ -17,6 +17,12 @@ val releaseSigning = Properties().apply {
     if (releaseSigningFile.exists()) releaseSigningFile.inputStream().use { load(it) }
 }
 
+/** The branch this build was taken from, surfaced on the About page as 渠道. */
+val buildChannel: String = providers.exec {
+    commandLine("git", "rev-parse", "--abbrev-ref", "HEAD")
+    isIgnoreExitValue = true
+}.standardOutput.asText.map { it.trim().ifEmpty { "main" } }.orElse("main").get()
+
 /**
  * The language packs are the single source of truth, but Android reads the app name and the
  * accessibility service label/description from resources before the app process starts. Generate
@@ -121,8 +127,9 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = 32
-        versionName = "Firefly 2.3.0 -G2"
+        versionName = "Firefly 2.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "BUILD_CHANNEL", "\"$buildChannel\"")
     }
     splits {
         abi {
@@ -132,7 +139,11 @@ android {
             isUniversalApk = true
         }
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        // The About page names the branch this build came from.
+        buildConfig = true
+    }
     // The G2 branch ships beside the stock Robin 2.2.0 assets, so the packaged APKs carry a G2- prefix.
     androidComponents {
         onVariants(selector().all()) { variant ->

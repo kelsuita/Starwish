@@ -3,6 +3,7 @@
   "about.donate": "捐助我",
   "about.donate_summary": "请Kelsuita吃包辣条",
   "about.github_link": "Github链接",
+    "about.channel": "渠道",
   "about.help_and_privacy": "星愿 · 使用说明与隐私",
   "about.made_by_kelsuita": "Kelsuita倾情出品",
   "about.privacy_note": "无需登录。启用一言后，应用会在没有缓存时向一言接口请求一句话；账户、目标与已确认余额只保存在应用私有存储，不会发送给一言接口。不收集页面截图，不保存完整页面文字。卸载应用会删除数据。",
