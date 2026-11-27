@@ -152,7 +152,6 @@ import java.io.File
 import java.text.Collator
 import java.text.SimpleDateFormat
 import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
@@ -1263,7 +1262,7 @@ private fun SavingsApp(
                         GoalCard(goal, accounts,
                             onEdit = { editingGoalId = goal.id; goalEditor = true },
                             onDelete = { deletingGoal = goal; deletingGoalVisible = true },
-                            onSync = { updateGoalBalances(goal) }, compact = appearance.compactList,
+                            onSync = { updateGoalBalances(goal) },
                             decimals = appearance.bannerDecimals)
                     }
                     if (goalGrid) {
@@ -1524,9 +1523,6 @@ private fun SavingsApp(
                                         featuredGoalId = if (value >= 2) goals[value - 2].id else ""))
                                 }
                             })
-                        SwitchPreference(title = tr("settings.compact_cards"), summary = tr("settings.compact_cards_summary"),
-                            checked = appearance.compactList,
-                            onCheckedChange = { value -> mutate { store.saveAppearance(store.appearance().copy(compactList = value)) } })
                         SwitchPreference(title = tr("settings.predictive_back"), summary = tr("settings.predictive_back_summary"),
                             checked = appearance.predictiveBackEnabled,
                             onCheckedChange = { value -> mutate { store.saveAppearance(store.appearance().copy(predictiveBackEnabled = value)) } })
@@ -2070,7 +2066,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     }
 }
 
-@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, compact: Boolean, decimals: Int) {
+@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, decimals: Int) {
     val color = MiuixTheme.colorScheme.primary
     // On the stock palette in dark mode the card accent moves to the container tint so the bar and
     // the percentage read as accents on the dark surface instead of the heavier primary.
@@ -2102,22 +2098,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         LinearProgressIndicator(progress = progress, height = 8.dp,
             modifier = Modifier.semantics { contentDescription = tr("home.progress_percent", percentLabel) },
             colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = accentColor, backgroundColor = MiuixTheme.colorScheme.secondaryContainer))
-        if (!compact) Text(if (saved >= goal.target) tr("home.goal_completed_celebration") else tr("home.remaining_amount_encourage", Money.format(goal.remaining(accounts))),
-            style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        if (!compact && goal.deadline.isNotBlank()) {
-            val days = runCatching { ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(goal.deadline)) }.getOrNull()
-            val advice = when {
-                saved >= goal.target -> tr("home.completed_early")
-                days == null -> ""
-                days < 0 -> tr("goal.overdue")
-                days == 0L -> tr("goal.due_today")
-                else -> tr("goal.remaining_days", days, Money.format((goal.remaining(accounts) + days - 1) / days))
-            }
-            Note("${goal.deadline}  /  $advice")
-        }
-        val linked = accounts.filter { it.id in goal.accountIds }
-        if (!compact) Text(linked.joinToString(" · ") { it.name }, style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        if (!compact && goal.mode == GoalMode.GROWTH) Note(tr("goal.starting_balance", Money.format(goal.baseline)))
         G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
             colors = primaryTextButtonColors())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

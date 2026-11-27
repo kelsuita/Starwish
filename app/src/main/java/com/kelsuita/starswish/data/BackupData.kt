@@ -80,7 +80,7 @@ data class BackupData(
 
     companion object {
         const val MAX_BYTES = 1024 * 1024
-        private val codec = Json { prettyPrint = true; encodeDefaults = true }
+        private val codec = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
         private val compactCodec = Json(codec) { prettyPrint = false }
 
         private fun fitsSizeLimit(text: String) = text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES

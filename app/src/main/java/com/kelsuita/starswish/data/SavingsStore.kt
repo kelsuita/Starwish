@@ -90,7 +90,6 @@ class SavingsStore(context: Context) {
             prefs.getInt("accent_index", 0) + 2 else 0).coerceIn(0, 5),
         prefs.getInt("banner_style", 0).coerceIn(0, 1),
         prefs.getString("featured_goal", "").orEmpty(),
-        prefs.getBoolean("compact_list", false),
         prefs.getInt("palette_style", 0).coerceIn(0, 8),
         prefs.getInt("color_spec", 1).coerceIn(0, 1),
         prefs.getBoolean("blur_enabled", false),
@@ -109,7 +108,6 @@ class SavingsStore(context: Context) {
             .putInt("accent_choice", value.accentIndex)
             .putInt("banner_style", value.bannerStyle)
             .putString("featured_goal", value.featuredGoalId)
-            .putBoolean("compact_list", value.compactList)
             .putInt("palette_style", value.paletteStyle)
             .putInt("color_spec", value.colorSpec)
             .putBoolean("blur_enabled", value.blurEnabled)
@@ -147,7 +145,7 @@ class SavingsStore(context: Context) {
             .putString("goals", JSONArray().apply { restoredGoals.forEach { put(goalJson(it)) } }.toString())
             .putInt("theme_mode", value.themeMode).putInt("accent_choice", value.accentIndex)
             .putInt("banner_style", value.bannerStyle).putString("featured_goal", value.featuredGoalId)
-            .putBoolean("compact_list", value.compactList).putInt("palette_style", value.paletteStyle)
+.putInt("palette_style", value.paletteStyle)
             .putInt("color_spec", value.colorSpec).putBoolean("blur_enabled", value.blurEnabled)
             .putBoolean("pure_black_background", value.pureBlackBackground)
             .putBoolean("floating_nav_bar", value.floatingNavBar)
