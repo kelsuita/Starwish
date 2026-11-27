@@ -22,4 +22,6 @@ data class Appearance(
     val bannerDecimals: Int = 0,
     /** Home banner shows every wish added up instead of one featured wish. */
     val bannerAllGoals: Boolean = false,
+    /** Goal cards fold 更新余额 / 编辑 / 删除 into a corner menu instead of showing them inline. */
+    val collapseCardActions: Boolean = false,
 )

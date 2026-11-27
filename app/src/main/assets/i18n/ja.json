@@ -210,6 +210,8 @@
   "settings.language_save_failed": "言語の保存に失敗しました。",
   "settings.predictive_back": "予測型戻るジェスチャー",
   "settings.predictive_back_summary": "システムの予測型戻るアニメーションを使用",
+    "settings.collapse_card_actions": "カードのボタンをまとめる",
+    "settings.collapse_card_actions_summary": "「残高を更新」「編集」「削除」をカード右上のメニューにまとめます",
   "settings.quote_enable": "一言を有効にする",
   "settings.quote_loading": "一言を読み込み中…",
   "settings.quote_summary": "中国語ユーザー向けに調整",
