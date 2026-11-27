@@ -259,7 +259,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
             MiuixTheme(controller = controller) {
-                CompositionLocalProvider(LocalContentColor provides MiuixTheme.colorScheme.onBackground) {
+                CompositionLocalProvider(
+                    LocalContentColor provides MiuixTheme.colorScheme.onBackground,
+                    LocalStockPalette provides (appearance.accentIndex == 0),
+                ) {
                     SavingsApp(store, revision, { revision++ }, appearance, dark, monetSeed, ::isReaderEnabled, ::openReaderSettings, ::openXiaoxing,
                         confirmBalanceRequested, { confirmBalanceRequested = false; intent.action = null })
                 }
@@ -2673,9 +2676,19 @@ private class SortDragState {
  * spec's light accent wash and [onTertiaryContainer] its accent-coloured text (light #EAF2FF on
  * #3482FF, dark #2B3B54 on #4788FF) — a soft tint with accent content, not a heavy filled block.
  */
-@Composable private fun statusChipBackground(): Color = MiuixTheme.colorScheme.tertiaryContainer
+/**
+ * True while the stock accent palette is active. The soft chip tint is only applied there; a
+ * wallpaper or fixed accent keeps the primary container pair it was generated with.
+ */
+private val LocalStockPalette = staticCompositionLocalOf { true }
 
-@Composable private fun statusChipContent(): Color = MiuixTheme.colorScheme.onTertiaryContainer
+@Composable private fun statusChipBackground(): Color =
+    if (LocalStockPalette.current) MiuixTheme.colorScheme.tertiaryContainer
+    else MiuixTheme.colorScheme.primaryContainer
+
+@Composable private fun statusChipContent(): Color =
+    if (LocalStockPalette.current) MiuixTheme.colorScheme.onTertiaryContainer
+    else MiuixTheme.colorScheme.onPrimaryContainer
 
 /** Small status pill. Miuix has no chip component, so keep it on the theme container roles. */
 @Composable private fun StatusPill(text: String) {
