@@ -65,6 +65,8 @@ data class SavingGoal(
     /** Set once the wish moved into 珍藏馆; it leaves the active list and stops counting toward
      *  the banner, and its card can only be taken back out of the vault. */
     val archived: Boolean = false,
+    /** When the wish entered 珍藏馆; 0 for wishes that never left the active list. */
+    val archivedAt: Long = 0L,
 ) {
     fun saved(accounts: List<BankAccount>): Long {
         val linked = accounts.filter { it.id in accountIds }

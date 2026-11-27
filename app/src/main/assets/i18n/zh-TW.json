@@ -129,6 +129,7 @@
   "common.undo": "撤銷",
   "format.title_dot_detail": "%s · %s",
   "goal.achieved": "目標已達成",
+    "goal.achieved_on": "達成時間：%s",
   "goal.calc_help_balance": "「目前餘額」：關聯帳戶的餘額合計。\n「從現在開始攢」：餘額合計減去建立目標時的起始餘額。若餘額減少，進度也會減少；最低顯示為 0%。",
   "goal.calculation_mode": "進度計算方式",
   "goal.completed": "已達成",
