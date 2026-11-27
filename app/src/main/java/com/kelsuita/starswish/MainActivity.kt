@@ -2448,7 +2448,6 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             colors = dialogFieldColors(balanceError.isNotEmpty()))
         FieldError(balanceError)
-        Note(tr("account.cny_only_note"))
         // Existing accounts can be linked from either side; the wish editor shows the mirror
         // image of this list. Archived wishes are left out: they are no longer editable.
         val editableGoals = goals.filter { !it.archived }
