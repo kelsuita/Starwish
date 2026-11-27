@@ -2664,20 +2664,29 @@ private class SortDragState {
 @Composable private fun Note(text: String) {
     Text(text, style = MiuixTheme.textStyles.body2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
 }
-/** Small status pill. Miuix has no chip component, so keep it on the theme container tokens. */
+/**
+ * Status chip and icon block colours, following Miuix's colour roles: [tertiaryContainer] is the
+ * spec's light accent wash and [onTertiaryContainer] its accent-coloured text (light #EAF2FF on
+ * #3482FF, dark #2B3B54 on #4788FF) — a soft tint with accent content, not a heavy filled block.
+ */
+@Composable private fun statusChipBackground(): Color = MiuixTheme.colorScheme.tertiaryContainer
+
+@Composable private fun statusChipContent(): Color = MiuixTheme.colorScheme.onTertiaryContainer
+
+/** Small status pill. Miuix has no chip component, so keep it on the theme container roles. */
 @Composable private fun StatusPill(text: String) {
-    Box(Modifier.squircleSurface(color = MiuixTheme.colorScheme.primaryContainer, cornerRadius = 8.dp)
+    Box(Modifier.squircleSurface(color = statusChipBackground(), cornerRadius = 8.dp)
         .padding(horizontal = 9.dp, vertical = 5.dp)) {
         Text(text, style = MiuixTheme.textStyles.footnote2,
-            color = MiuixTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Medium)
+            color = statusChipContent(), fontWeight = FontWeight.Medium)
     }
 }
 @Composable private fun IconTile(kind: String) {
     // 44dp tile with a 10dp radius: the squircle tile (10dp × 1.5) stays well under half the side,
     // so it reads as a G2 rounded square instead of clamping into a circle.
-    Box(Modifier.size(44.dp).squircleSurface(color = MiuixTheme.colorScheme.primaryContainer, cornerRadius = 10.dp),
+    Box(Modifier.size(44.dp).squircleSurface(color = statusChipBackground(), cornerRadius = 10.dp),
         contentAlignment = Alignment.Center) {
-        Symbol(kind, MiuixTheme.colorScheme.onPrimaryContainer, Modifier.size(24.dp))
+        Symbol(kind, statusChipContent(), Modifier.size(24.dp))
     }
 }
 @Composable private fun EmptyCard(kind: String, title: String, body: String, action: String, onClick: () -> Unit) {
