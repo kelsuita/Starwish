@@ -30,7 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
+import top.yukonga.miuix.kmp.squircle.g2CapsuleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -214,7 +214,7 @@ internal fun IosLiquidGlassNavigationBar(
     barBlurRadiusPx: Float,
     modifier: Modifier = Modifier,
 ) {
-    val pillShape = remember { CircleShape }
+    val pillShape = remember { g2CapsuleShape() }
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     // Dark mode adds a touch of white so the glass doesn't read as flat grey.

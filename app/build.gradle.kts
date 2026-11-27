@@ -120,7 +120,7 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 26
+        versionCode = 27
         versionName = "Robin 2.2.0 -G2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

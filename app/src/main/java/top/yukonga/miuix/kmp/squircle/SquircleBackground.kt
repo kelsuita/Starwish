@@ -17,10 +17,12 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -52,7 +54,23 @@ fun Modifier.squircleBackground(
     color: Color,
     cornerRadius: Dp,
     extension: Float = SquircleDefaults.Extension,
-): Modifier = squircleBackground(color, cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+): Modifier {
+    val brush = rememberSquircleBrush(color, cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+        ?: return this.background(
+            color = color,
+            shape = RoundedCornerShape(cornerRadius),
+        )
+    // A capsule has no straight run for the squircle tile to fade into, so it is drawn from the
+    // two-segment G2 cap path instead (see G2Capsule.kt) to keep the corner curvature continuous.
+    return this.drawWithCache {
+        if (isG2Capsule(size, cornerRadius.toPx(), extension)) {
+            val path = Path().apply { addG2Capsule(size.width, size.height) }
+            onDrawBehind { clipPath(path) { drawRect(color) } }
+        } else {
+            onDrawBehind { drawRect(brush) }
+        }
+    }
+}
 
 /**
  * Per-corner variant of [squircleBackground]. Ordering matches [RoundedCornerShape].
@@ -96,7 +114,11 @@ fun Modifier.squircleBackground(
 fun Modifier.squircleClip(
     cornerRadius: Dp,
     extension: Float = SquircleDefaults.Extension,
-): Modifier = squircleClip(cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+): Modifier {
+    val brush = rememberSquircleBrush(Color.White, cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+        ?: return this.clip(RoundedCornerShape(cornerRadius))
+    return this.squircleShaderMask(brush, fillColor = null, capsuleRadius = cornerRadius, extension = extension)
+}
 
 /**
  * Per-corner variant of [squircleClip].
@@ -135,7 +157,13 @@ fun Modifier.squircleSurface(
     color: Color,
     cornerRadius: Dp,
     extension: Float = SquircleDefaults.Extension,
-): Modifier = squircleSurface(color, cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+): Modifier {
+    val brush = rememberSquircleBrush(Color.White, cornerRadius, cornerRadius, cornerRadius, cornerRadius, extension)
+        ?: return this
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(color)
+    return this.squircleShaderMask(brush, fillColor = color, capsuleRadius = cornerRadius, extension = extension)
+}
 
 /**
  * Per-corner variant of [squircleSurface].
@@ -255,6 +283,8 @@ fun Modifier.absoluteSquircleSurface(
 private fun Modifier.squircleShaderMask(
     brush: SquircleShaderBrush,
     fillColor: Color?,
+    capsuleRadius: Dp? = null,
+    extension: Float = SquircleDefaults.Extension,
 ): Modifier = this
     .graphicsLayer {
         compositingStrategy =
@@ -265,14 +295,25 @@ private fun Modifier.squircleShaderMask(
             }
     }
     .drawWithCache {
-        val layerPaint = Paint()
-        val contentLayer = obtainGraphicsLayer()
-        onDrawWithContent {
-            if (maxOf(size.width, size.height) <= MAX_OFFSCREEN_PX) {
-                drawSquircleFast(brush, fillColor)
-            } else {
-                contentLayer.record { this@onDrawWithContent.drawContent() }
-                drawSquircleBanded(brush, fillColor, layerPaint, contentLayer)
+        if (capsuleRadius != null && isG2Capsule(size, capsuleRadius.toPx(), extension)) {
+            // Capsules have nothing for the corner tile to fade into, so they take the G2 cap path.
+            val path = Path().apply { addG2Capsule(size.width, size.height) }
+            onDrawWithContent {
+                clipPath(path) {
+                    if (fillColor != null) drawRect(fillColor)
+                    this@onDrawWithContent.drawContent()
+                }
+            }
+        } else {
+            val layerPaint = Paint()
+            val contentLayer = obtainGraphicsLayer()
+            onDrawWithContent {
+                if (maxOf(size.width, size.height) <= MAX_OFFSCREEN_PX) {
+                    drawSquircleFast(brush, fillColor)
+                } else {
+                    contentLayer.record { this@onDrawWithContent.drawContent() }
+                    drawSquircleBanded(brush, fillColor, layerPaint, contentLayer)
+                }
             }
         }
     }
