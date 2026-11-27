@@ -1733,8 +1733,16 @@ private fun SavingsApp(
                     }
                     Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("about.github_link"), summary = tr("about.project_note"), onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/kelsuita/starswish")))
+                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/kelsuita/Starwish")))
                         })
+                        // Informational only: which branch this copy was built from.
+                        BasicComponent(
+                            title = tr("about.channel"),
+                            endActions = {
+                                Text(BuildConfig.BUILD_CHANNEL, style = MiuixTheme.textStyles.body2,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            },
+                        )
                         ArrowPreference(title = tr("about.donate"), summary = tr("about.donate_summary"), onClick = {
                             context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://afdian.com/a/kelsuita")))
                         })
