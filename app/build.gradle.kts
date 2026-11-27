@@ -120,8 +120,8 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 25
-        versionName = "Robin 2.2.0"
+        versionCode = 26
+        versionName = "Robin 2.2.0 -G2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     splits {
@@ -133,6 +133,14 @@ android {
         }
     }
     buildFeatures { compose = true }
+    // The G2 branch ships beside the stock Robin 2.2.0 assets, so the packaged APKs carry a G2- prefix.
+    androidComponents {
+        onVariants(selector().all()) { variant ->
+            variant.outputs.forEach { output ->
+                output.outputFileName.set("G2-${output.outputFileName.get()}")
+            }
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
