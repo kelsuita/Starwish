@@ -29,7 +29,7 @@
   "accessibility.queue_progress": "正在读取第 %d / %d 个关联账户",
   "accessibility.privacy_detail": "不会读取其他应用、收集截图或上传数据，不会执行点击、记账或转账。页面结构变化时可能无法识别，请使用手动更新。你可随时在系统设置关闭此权限。",
   "accessibility.read_and_confirm": "读取并确认",
-  "accessibility.read_balance": "读取小星余额",
+  "accessibility.read_balance": "读取余额",
   "accessibility.read_done_return": "已读取，请返回星愿",
   "accessibility.read_enabled": "页面读取已开启 · 按需读取",
   "accessibility.read_help": "点击读取，进入小星的账户详情页，再回到这里核对并确认余额。若页面不可识别，可手动更新。",
