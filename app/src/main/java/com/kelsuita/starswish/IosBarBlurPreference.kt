@@ -18,9 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.kelsuita.starswish.data.IOS_BAR_BLUR_DEFAULT_PX
 import com.kelsuita.starswish.data.IOS_BAR_BLUR_MAX_PX
 import com.kelsuita.starswish.data.tr
+import com.kelsuita.starswish.ui.G2Card
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -42,7 +42,7 @@ internal fun IosBarBlurPreference(
     var holdDown by rememberSaveable { mutableStateOf(false) }
     var input by rememberSaveable { mutableStateOf("") }
 
-    Card(Modifier.fillMaxWidth()) {
+    G2Card(Modifier.fillMaxWidth()) {
         if (enabled) {
             SliderPreference(
                 title = title,

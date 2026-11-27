@@ -57,7 +57,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -135,8 +134,6 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.squircle.squircleSurface
-import top.yukonga.miuix.kmp.squircle.isSquircleEnabled
-import top.yukonga.miuix.kmp.squircle.addSquircleRect
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.kelsuita.starswish.data.*
@@ -162,6 +159,8 @@ import java.util.UUID
 import kotlin.math.roundToInt
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.*
+import com.kelsuita.starswish.ui.G2Card
+import com.kelsuita.starswish.ui.cardCornerShape
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -1405,7 +1404,7 @@ private fun SavingsApp(
                 }
                 2 -> {
                     SmallTitle(text = tr("settings.language"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         OverlayDropdownPreference(title = tr("settings.language"),
                             summary = if (Languages.choice == AppLanguage.FollowSystem)
                                 tr("settings.follow_system_language", Languages.current.nativeName)
@@ -1420,7 +1419,7 @@ private fun SavingsApp(
                             } })
                     }
                     SmallTitle(text = tr("settings.appearance"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("theme.title"), summary = tr("settings.theme_summary"), onClick = { navigate(4) })
                         if (Languages.current.isChinese) {
                             SwitchPreference(title = tr("settings.quote_enable"), summary = tr("settings.quote_summary"),
@@ -1432,11 +1431,11 @@ private fun SavingsApp(
                         }
                     }
                     SmallTitle(text = tr("settings.backup"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("settings.import_export"), summary = tr("settings.import_export_summary"), onClick = { navigate(5) })
                     }
                     SmallTitle(text = tr("settings.app"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("about.title"), summary = tr("about.help_and_privacy"), onClick = { navigate(3) })
                         if (developerMode) {
                             ArrowPreference(title = tr("settings.developer_options"),
@@ -1446,7 +1445,7 @@ private fun SavingsApp(
                 }
                 4 -> {
                     SmallTitle(text = tr("settings.theme"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         OverlayDropdownPreference(title = tr("theme.mode"), summary = tr("theme.choose_mode"),
                             items = listOf(tr("settings.follow_system"), tr("theme.light"), tr("theme.dark")), selectedIndex = appearance.themeMode,
                             onSelectedIndexChange = { value -> mutate { store.saveAppearance(store.appearance().copy(themeMode = value)) } })
@@ -1490,7 +1489,7 @@ private fun SavingsApp(
                         }
                     }
                     SmallTitle(text = tr("nav.home"), insideMargin = SectionTitlePadding)
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         OverlayDropdownPreference(title = tr("home.banner"), items = listOf(tr("theme.light"), tr("theme.dark")),
                             selectedIndex = appearance.bannerStyle,
                             onSelectedIndexChange = { value -> mutate { store.saveAppearance(store.appearance().copy(bannerStyle = value)) } })
@@ -1546,7 +1545,7 @@ private fun SavingsApp(
                     ) {
                         // The sheet paints itself with colorScheme.background. The stock palette sets
                         // surfaceContainer to that same color, so use [sheetCardColors] here too.
-                        Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+                        G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically) {
@@ -1591,7 +1590,7 @@ private fun SavingsApp(
                     }
                 }
                 5 -> {
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("backup.export"), summary = tr("backup.export_summary"),
                             enabled = !backupBusy, onClick = {
                                 exportLauncher.launch("starswish-backup-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date())}.json")
@@ -1619,7 +1618,7 @@ private fun SavingsApp(
                         Text("$versionName  /  ${tr("about.made_by_kelsuita")}",
                             style = MiuixTheme.textStyles.footnote1, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                     }
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         ArrowPreference(title = tr("about.github_link"), summary = tr("about.project_note"), onClick = {
                             context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://github.com/kelsuita/starswish")))
                         })
@@ -1650,7 +1649,7 @@ private fun SavingsApp(
                     }, modifier = Modifier.fillMaxWidth()) { Text(tr("about.xiaoxing_docs")) }
                 }
                 8 -> {
-                    Card(Modifier.fillMaxWidth()) {
+                    G2Card(Modifier.fillMaxWidth()) {
                         SwitchPreference(title = tr("settings.developer_options"),
                             summary = tr("settings.developer_options_summary"),
                             checked = developerMode,
@@ -1658,7 +1657,7 @@ private fun SavingsApp(
                     }
                     if (developerMode) {
                         SmallTitle(text = tr("settings.developer_accounts"), insideMargin = SectionTitlePadding)
-                        Card(Modifier.fillMaxWidth()) {
+                        G2Card(Modifier.fillMaxWidth()) {
                             SwitchPreference(title = tr("settings.webdav_balance"),
                                 summary = tr("settings.webdav_balance_summary"),
                                 checked = webDavMode,
@@ -1721,7 +1720,7 @@ private fun SavingsApp(
         ) {
             Column(Modifier.fillMaxWidth()) {
                 SmallTitle(text = tr("webdav.account_config"), insideMargin = SectionTitlePadding)
-                Card(
+                G2Card(
                     Modifier.fillMaxWidth(),
                     colors = CardDefaults.defaultColors(
                         color = MiuixTheme.colorScheme.surfaceContainerHigh,
@@ -1767,7 +1766,7 @@ private fun SavingsApp(
                 Text(tr("webdav.picker_summary"), modifier = Modifier.padding(horizontal = 16.dp),
                     style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+                G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                     webDavPicker.forEach { option ->
                         val note = option.note
                         val amount = "¥ ${Money.format(option.cents)}"
@@ -1800,7 +1799,7 @@ private fun SavingsApp(
         ) {
             val plan = webDavPlan
             // The card's bottom edge sits 48dp above the screen bottom (sheet inside margin).
-            Card(Modifier.fillMaxWidth().heightIn(max = 480.dp), colors = sheetCardColors()) {
+            G2Card(Modifier.fillMaxWidth().heightIn(max = 480.dp), colors = sheetCardColors()) {
                 Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (plan == null || (plan.changes.isEmpty() && plan.additions.isEmpty())) {
@@ -2015,7 +2014,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     val subtle = foreground.copy(alpha = if (status) .7f else .82f)
     val base = if (status) MiuixTheme.colorScheme.primaryContainer else accent
     val fill = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
-    Card(
+    G2Card(
         modifier = Modifier.fillMaxWidth()
             .clearAndSetSemantics { contentDescription = tr("home.banner_description", title, if (completed) tr("home.completed") else percentText) },
         cornerRadius = 20.dp,
@@ -2157,7 +2156,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             Note(tr("account.empty_before_goal"))
             Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text(tr("account.add_first")) }
         } else {
-            Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+            G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                 accounts.forEach { account ->
                     CheckboxPreference(
                         title = account.name,
@@ -2173,7 +2172,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         }
         FieldError(accountError)
         SmallTitle(text = tr("goal.calculation_mode"), insideMargin = SectionTitlePadding)
-        Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+        G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
             RadioButtonPreference(
                 title = tr("goal.current_balance"),
                 summary = tr("goal.mode_balance_summary"),
@@ -2474,13 +2473,8 @@ private class SortDragState {
     val color = MiuixTheme.colorScheme.onSurfaceVariantActions
     val density = androidx.compose.ui.platform.LocalDensity.current
     val cornerRadius = CardDefaults.CornerRadius
-    val cornerRadiusPx = with(density) { cornerRadius.toPx() }
-    val squircleEnabled = isSquircleEnabled()
-    val cardShape = remember(cornerRadiusPx, squircleEnabled) {
-        GenericShape { size, _ ->
-            addSquircleRect(size.width, size.height, cornerRadiusPx, squircleEnabled = squircleEnabled)
-        }
-    }
+    // Same silhouette the card itself draws, so the lifted shadow tracks the card outline.
+    val cardShape = cardCornerShape(cornerRadius)
     val haptics = LocalHapticFeedback.current
     var rowHeight by remember { mutableFloatStateOf(64f) }
     var handleCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
@@ -2572,7 +2566,7 @@ private class SortDragState {
         }
     }
 
-    Card(Modifier.fillMaxWidth().zIndex(when {
+    G2Card(Modifier.fillMaxWidth().zIndex(when {
         dragActive -> 2f
         shiftTarget != 0f -> 1f
         else -> 0f
@@ -2660,7 +2654,7 @@ private class SortDragState {
 }
 
 @Composable private fun Panel(content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth().animateContentSize(),
+    G2Card(Modifier.fillMaxWidth().animateContentSize(),
         insideMargin = PaddingValues(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
