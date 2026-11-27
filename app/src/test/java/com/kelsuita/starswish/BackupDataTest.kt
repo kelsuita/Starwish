@@ -53,7 +53,7 @@ class BackupDataTest {
 
     @Test fun backupIncludesAllSettings() {
         val original = backup().copy(
-            appearance = backup().appearance.copy(bannerAllGoals = true),
+            appearance = backup().appearance.copy(bannerAllGoals = true, collapseCardActions = true),
             developerMode = false, webDavBalanceEnabled = true, iosBarBlurRadius = 0,
             goals = backup().goals.map { goal ->
                 goal.copy(links = listOf(GoalAccountLink("account", GoalMode.GROWTH, 100000L, 5L)))
@@ -64,6 +64,14 @@ class BackupDataTest {
         assertTrue(json.contains("\"language\": 3"))
         assertTrue(json.contains("\"quoteEnabled\": false"))
         assertTrue(json.contains("\"predictiveBackEnabled\": false"))
+        assertTrue(json.contains("\"collapseCardActions\": true"))
+    }
+
+    @Test fun backupWithoutTheCardMenuSwitchStillImports() {
+        val json = backup().toJson().replace(Regex(""",\s*"collapseCardActions"\s*:\s*(?:true|false)"""), "")
+        assertFalse(json.contains("collapseCardActions"))
+        assertEquals(backup(), BackupData.fromJson(json))
+        assertFalse(BackupData.fromJson(json).appearance.collapseCardActions)
     }
 
     @Test fun oldBackupMayOmitNewSettings() {
