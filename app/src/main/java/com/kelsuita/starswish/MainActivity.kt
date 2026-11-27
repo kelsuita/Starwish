@@ -2042,7 +2042,8 @@ private fun SavingsApp(
             ) {
                 // The congratulations gets its own line at title size; the instruction stays a
                 // muted note so the two do not compete.
-                Text(tr("goal.bittersweet_congrats"), style = MiuixTheme.textStyles.title4)
+                Text(tr("goal.bittersweet_congrats"), style = MiuixTheme.textStyles.title4,
+                    fontWeight = FontWeight.Bold)
                 Note(if (webDavActive) tr("goal.bittersweet_webdav") else tr("goal.bittersweet_local"))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(text = tr("common.cancel"), onClick = { archivingVisible = false },
