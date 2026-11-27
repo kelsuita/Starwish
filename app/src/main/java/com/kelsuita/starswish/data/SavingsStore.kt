@@ -190,7 +190,7 @@ class SavingsStore(context: Context) {
                         runCatching { GoalMode.valueOf(o.optString("mode", "BALANCE")) }
                             .getOrDefault(GoalMode.BALANCE), o.optLong("baseline"),
                         o.optString("deadline"), o.optInt("colorIndex"), o.optLong("createdAt", i.toLong() + 1),
-                        linksFrom(o, accountIds))
+                        linksFrom(o, accountIds), o.optBoolean("archived", false))
                 }
             }.getOrNull()
         }
@@ -331,7 +331,7 @@ class SavingsStore(context: Context) {
     private fun goalJson(goal: SavingGoal) = JSONObject().put("id", goal.id).put("title", goal.title)
         .put("target", goal.target).put("accountIds", JSONArray(goal.accountIds.toList()))
         .put("mode", goal.mode.name).put("baseline", goal.baseline).put("deadline", goal.deadline)
-        .put("colorIndex", goal.colorIndex).put("createdAt", goal.createdAt)
+        .put("colorIndex", goal.colorIndex).put("createdAt", goal.createdAt).put("archived", goal.archived)
         .put("links", JSONArray().apply { goal.links.forEach { link ->
             put(JSONObject().put("accountId", link.accountId).put("mode", link.mode.name)
                 .put("baseline", link.baseline).put("baselineAt", link.baselineAt))
