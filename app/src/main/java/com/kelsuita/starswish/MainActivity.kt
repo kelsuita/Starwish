@@ -160,6 +160,8 @@ import kotlin.math.roundToInt
 import org.json.JSONObject
 import top.yukonga.miuix.kmp.basic.*
 import com.kelsuita.starswish.ui.G2Card
+import com.kelsuita.starswish.ui.G2Button
+import com.kelsuita.starswish.ui.G2TextButton
 import com.kelsuita.starswish.ui.cardCornerShape
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
@@ -1201,9 +1203,9 @@ private fun SavingsApp(
                         (captureTotal - captureQueue.size + 1).coerceAtLeast(1), captureTotal))
                     Note(tr("accessibility.recognized_at", timeLabel(shown.capturedAt)))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TextButton(text = tr("common.ignore"), onClick = { cancelCaptureQueue(); mutate { store.clearCandidate() } },
+                        G2TextButton(text = tr("common.ignore"), onClick = { cancelCaptureQueue(); mutate { store.clearCandidate() } },
                             modifier = Modifier.weight(1f))
-                        TextButton(text = tr("accessibility.confirm_sync"), onClick = { acceptCapturedBalance() },
+                        G2TextButton(text = tr("accessibility.confirm_sync"), onClick = { acceptCapturedBalance() },
                             enabled = account != null, modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.textButtonColorsPrimary())
                     }
@@ -1215,7 +1217,7 @@ private fun SavingsApp(
                     if (captureTotal > 1) Note(tr("accessibility.queue_progress",
                         (captureTotal - captureQueue.size + 1).coerceAtLeast(1), captureTotal))
                     Note(tr("accessibility.read_steps_detail"))
-                    TextButton(text = tr("accessibility.cancel_read"),
+                    G2TextButton(text = tr("accessibility.cancel_read"),
                         onClick = { cancelCaptureQueue(); mutate { store.cancelCapture() } })
                 }
             }
@@ -1293,7 +1295,7 @@ private fun SavingsApp(
                         }
                         if (!webDavActive) {
                             Note(tr("accessibility.no_public_api_note"))
-                            Button(onClick = {
+                            G2Button(onClick = {
                                 if (enabled) {
                                     openReaderSettings()
                                     notify(tr("accessibility.disable_in_settings"))
@@ -1306,12 +1308,12 @@ private fun SavingsApp(
                                 Text(if (enabled) tr("accessibility.disable_service") else tr("accessibility.set_up_permission"))
                             }
                         } else {
-                            Button(onClick = { beginWebDavRead() }, modifier = Modifier.fillMaxWidth(),
+                            G2Button(onClick = { beginWebDavRead() }, modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColorsPrimary(), enabled = !webDavBusy) {
                                 Text(tr("webdav.button"))
                             }
                             if (webDavConnected) {
-                                Button(onClick = { readWebDav(chooseAccounts = false) }, modifier = Modifier.fillMaxWidth(), enabled = !webDavBusy) {
+                                G2Button(onClick = { readWebDav(chooseAccounts = false) }, modifier = Modifier.fillMaxWidth(), enabled = !webDavBusy) {
                                     Text(tr("webdav.reread"))
                                 }
                             }
@@ -1343,7 +1345,7 @@ private fun SavingsApp(
                                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             // The read action names the source page, so it is longer than the other two
                             // in every language: give it a full row and share the second row.
-                            TextButton(text = tr("accessibility.read_balance"), onClick = {
+                            G2TextButton(text = tr("accessibility.read_balance"), onClick = {
                                 if (webDavActive) {
                                     if (webDavConnected) {
                                         notify(tr("webdav.reading_toast"))
@@ -1352,9 +1354,9 @@ private fun SavingsApp(
                                 } else capture(account)
                             }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColorsPrimary())
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TextButton(text = tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true },
+                                G2TextButton(text = tr("common.edit"), onClick = { editingAccountId = account.id; accountEditor = true },
                                     modifier = Modifier.weight(1f))
-                                TextButton(text = tr("common.delete"), onClick = { deletingAccount = account; deletingAccountVisible = true },
+                                G2TextButton(text = tr("common.delete"), onClick = { deletingAccount = account; deletingAccountVisible = true },
                                     modifier = Modifier.weight(1f))
                             }
                         }
@@ -1636,7 +1638,7 @@ private fun SavingsApp(
                     Panel {
                         Note(tr("about.privacy_note"))
                         Note(tr("accessibility.read_privacy_note"))
-                        TextButton(text = tr("accessibility.manage_permission"), onClick = { disclosure = true },
+                        G2TextButton(text = tr("accessibility.manage_permission"), onClick = { disclosure = true },
                             modifier = Modifier.fillMaxWidth())
                     }
                     SmallTitle(tr("goal.how_progress_works"), insideMargin = SectionTitlePadding)
@@ -1644,7 +1646,7 @@ private fun SavingsApp(
                         Note(tr("goal.calc_help_balance"))
                         Note(tr("goal.edit_help"))
                     }
-                    Button(onClick = {
+                    G2Button(onClick = {
                         context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://cxincx.com/support/scheme.html")))
                     }, modifier = Modifier.fillMaxWidth()) { Text(tr("about.xiaoxing_docs")) }
                 }
@@ -1847,9 +1849,9 @@ private fun SavingsApp(
                     Note(tr("backup.created_at", date))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(text = tr("common.cancel"), onClick = { importVisible = false },
+                    G2TextButton(text = tr("common.cancel"), onClick = { importVisible = false },
                         enabled = !backupBusy, modifier = Modifier.weight(1f))
-                    TextButton(text = tr("backup.confirm_import"), onClick = {
+                    G2TextButton(text = tr("backup.confirm_import"), onClick = {
                         scope.launch {
                             backupBusy = true
                             try {
@@ -1920,8 +1922,8 @@ private fun SavingsApp(
             Note(tr("accessibility.permission_summary"))
             Note(tr("accessibility.privacy_detail"))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(text = tr("common.not_now"), onClick = { disclosure = false }, modifier = Modifier.weight(1f))
-                TextButton(text = tr("accessibility.learn_and_open_settings"), onClick = {
+                G2TextButton(text = tr("common.not_now"), onClick = { disclosure = false }, modifier = Modifier.weight(1f))
+                G2TextButton(text = tr("accessibility.learn_and_open_settings"), onClick = {
                     disclosure = false
                     openReaderSettings()
                 }, modifier = Modifier.weight(1f), colors = ButtonDefaults.textButtonColorsPrimary())
@@ -1938,9 +1940,9 @@ private fun SavingsApp(
             ) {
                 Note(tr("goal.delete_message", goal.title))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(text = tr("common.cancel"), onClick = { deletingGoalVisible = false },
+                    G2TextButton(text = tr("common.cancel"), onClick = { deletingGoalVisible = false },
                         modifier = Modifier.weight(1f))
-                    TextButton(text = tr("common.delete"), onClick = {
+                    G2TextButton(text = tr("common.delete"), onClick = {
                         if (mutate { store.deleteGoal(goal.id) }) deletingGoalVisible = false
                     }, modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
@@ -1959,9 +1961,9 @@ private fun SavingsApp(
             ) {
                 Note(tr("account.delete_linked_message", account.name))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(text = tr("common.cancel"), onClick = { deletingAccountVisible = false },
+                    G2TextButton(text = tr("common.cancel"), onClick = { deletingAccountVisible = false },
                         modifier = Modifier.weight(1f))
-                    TextButton(text = tr("common.delete"), onClick = {
+                    G2TextButton(text = tr("common.delete"), onClick = {
                         if (mutate { store.deleteAccount(account.id) }) deletingAccountVisible = false
                     }, modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
@@ -2106,11 +2108,11 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         val linked = accounts.filter { it.id in goal.accountIds }
         if (!compact) Text(linked.joinToString(" · ") { it.name }, style = MiuixTheme.textStyles.footnote2, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         if (!compact && goal.mode == GoalMode.GROWTH) Note(tr("goal.starting_balance", Money.format(goal.baseline)))
-        TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
+        G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.textButtonColorsPrimary())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
-            TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))
+            G2TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
+            G2TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -2154,7 +2156,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         SmallTitle(text = tr("goal.linked_accounts"), insideMargin = SectionTitlePadding)
         if (accounts.isEmpty()) {
             Note(tr("account.empty_before_goal"))
-            Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text(tr("account.add_first")) }
+            G2Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text(tr("account.add_first")) }
         } else {
             G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                 accounts.forEach { account ->
@@ -2187,8 +2189,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
-            TextButton(text = if (existing == null) tr("goal.start_wish") else tr("common.save_changes"), onClick = {
+            G2TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
+            G2TextButton(text = if (existing == null) tr("goal.start_wish") else tr("common.save_changes"), onClick = {
                 val target = Money.parse(amount)
                 val parsedDate = if (date.isBlank()) null else runCatching { LocalDate.parse(date) }.getOrNull()
                 titleError = if (title.isBlank()) tr("goal.name_empty_error") else ""
@@ -2251,8 +2253,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         FieldError(balanceError)
         Note(tr("account.cny_only_note"))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
-            TextButton(text = tr("account.save"), onClick = {
+            G2TextButton(text = tr("common.cancel"), onClick = onDismiss, modifier = Modifier.weight(1f))
+            G2TextButton(text = tr("account.save"), onClick = {
                 val cents = Money.parse(balance)
                 nameError = if (name.isBlank()) tr("account.error_name_required") else ""
                 balanceError = if (cents == null) tr("account.error_invalid_balance") else ""
@@ -2686,7 +2688,7 @@ private class SortDragState {
             Text(title, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold)
             Text(body, style = MiuixTheme.textStyles.body2, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            Button(onClick = onClick, colors = ButtonDefaults.buttonColorsPrimary()) { Text(action) }
+            G2Button(onClick = onClick, colors = ButtonDefaults.buttonColorsPrimary()) { Text(action) }
         }
     }
 }

@@ -18,11 +18,12 @@ import androidx.compose.ui.unit.dp
 import com.kelsuita.starswish.data.IOS_BAR_BLUR_DEFAULT_PX
 import com.kelsuita.starswish.data.IOS_BAR_BLUR_MAX_PX
 import com.kelsuita.starswish.data.tr
+import com.kelsuita.starswish.ui.G2Button
+import com.kelsuita.starswish.ui.G2TextButton
 import com.kelsuita.starswish.ui.G2Card
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SliderPreference
@@ -96,13 +97,13 @@ internal fun IosBarBlurPreference(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
         Row(horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(
+            G2TextButton(
                 text = tr("common.cancel"),
                 onClick = { showDialog = false },
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(20.dp))
-            TextButton(
+            G2TextButton(
                 text = tr("common.confirm"),
                 onClick = {
                     onRadiusChange(input.toIntOrNull() ?: IOS_BAR_BLUR_DEFAULT_PX)
