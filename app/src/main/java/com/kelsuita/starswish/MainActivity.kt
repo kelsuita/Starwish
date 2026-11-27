@@ -431,6 +431,10 @@ private fun SavingsApp(
     var deletingAccount by remember { mutableStateOf<BankAccount?>(null) }
     var deletingGoalVisible by remember { mutableStateOf(false) }
     var deletingAccountVisible by remember { mutableStateOf(false) }
+    var archivingGoal by remember { mutableStateOf<SavingGoal?>(null) }
+    var archivingVisible by remember { mutableStateOf(false) }
+    var removingGoal by remember { mutableStateOf<SavingGoal?>(null) }
+    var removingVisible by remember { mutableStateOf(false) }
     // The pending import is kept as JSON so the confirmation survives recreation.
     var pendingBackupJson by rememberSaveable(stateSaver = PendingBackupSaver) { mutableStateOf<String?>(null) }
     var importVisible by rememberSaveable { mutableStateOf(false) }
@@ -897,7 +901,8 @@ private fun SavingsApp(
     val pagerBackState = rememberNavigationEventState(NavigationEventInfo.None)
     val pagerBackEnabled = backStack.size == 1 && selectedTab != 0 &&
         !goalEditor && !accountEditor && !disclosure &&
-        !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet
+        !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet &&
+        !archivingVisible && !removingVisible
     if (appearance.predictiveBackEnabled) {
         NavigationBackHandler(
             state = pagerBackState,
@@ -924,7 +929,7 @@ private fun SavingsApp(
     if (blockPredictive) {
         val activity = context as? ComponentActivity
         DisposableEffect(activity, backStack.size, selectedTab, goalEditor, accountEditor, disclosure,
-            deletingGoalVisible, deletingAccountVisible, importVisible) {
+            deletingGoalVisible, deletingAccountVisible, importVisible, archivingVisible, removingVisible) {
             val callback = OnBackInvokedCallback {
                 when {
                     backStack.size > 1 -> popRoute()
@@ -957,6 +962,7 @@ private fun SavingsApp(
     val railPage = if (backStack.size > 1 && topRoute >= 3) when (topRoute) {
         6 -> 0
         7 -> 1
+        9 -> 0
         else -> 2
     } else selectedTab
     Row(Modifier.fillMaxSize()) {
@@ -1104,7 +1110,7 @@ private fun SavingsApp(
                     colors = BlurDefaults.blurColors(blendColors = listOf(BlendColorEntry(pageBackground.copy(alpha = .8f))))) else Modifier)
                 .background(if (backdrop != null) Color.Transparent else pageBackground)) {
                 TopAppBar(
-                    title = when (displayedPage) { 0 -> tr("app.name"); 1 -> tr("account.title"); 2 -> tr("settings.title"); 4 -> tr("theme.title"); 5 -> tr("settings.import_export"); 6 -> tr("sort.goals_title"); 7 -> tr("sort.accounts_title"); 8 -> tr("settings.developer_options"); else -> tr("about.title") },
+                    title = when (displayedPage) { 0 -> tr("app.name"); 1 -> tr("account.title"); 2 -> tr("settings.title"); 4 -> tr("theme.title"); 5 -> tr("settings.import_export"); 6 -> tr("sort.goals_title"); 7 -> tr("sort.accounts_title"); 8 -> tr("settings.developer_options"); 9 -> tr("vault.title"); else -> tr("about.title") },
                     subtitle = "",
                     color = barColor,
                     scrollBehavior = contentScrollBehavior,
@@ -1174,10 +1180,15 @@ private fun SavingsApp(
                             Icon(MiuixIcons.More, contentDescription = tr("sort.menu"), modifier = Modifier.size(24.dp))
                         }
                     }
+                    if (displayedPage == 9) {
+                        OverlayIconDropdownMenu(entry = DropdownEntry(listOf(
+                            DropdownItem(tr("sort.title"), onClick = { navigate(6) }),
+                        ))) { Icon(MiuixIcons.More, contentDescription = tr("vault.menu"), modifier = Modifier.size(24.dp)) }
+                    }
                 },
                 navigationIcon = {
                     if (displayedPage >= 3) IconButton(onClick = { popRoute() }) {
-                        Icon(MiuixIcons.Back, contentDescription = if (displayedPage == 6) tr("common.back_to_goals")
+                        Icon(MiuixIcons.Back, contentDescription = if (displayedPage == 6 || displayedPage == 9) tr("common.back_to_goals")
                             else if (displayedPage == 7) tr("common.back_to_accounts") else tr("common.back_to_settings"))
                     }
                 })
@@ -1243,17 +1254,20 @@ private fun SavingsApp(
             Spacer(Modifier.height(2.dp))
             when (displayedPage) {
                 0 -> {
-                    Overview(goals, accounts, appearance, accent, deviceAccountName)
+                    // 珍藏馆 keeps the finished wishes out of the active list (and the banner).
+                    val activeGoals = goals.filter { !it.archived }
+                    Overview(activeGoals, accounts, appearance, accent, deviceAccountName)
                     captureStatus()
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         SmallTitle(tr("home.goal_list"), insideMargin = SectionTitlePadding)
                         OverlayIconDropdownMenu(entry = DropdownEntry(listOf(
                             DropdownItem(tr("goal.new_goal"), onClick = { editingGoalId = null; goalEditor = true }),
+                            DropdownItem(tr("vault.title"), onClick = { navigate(9) }),
                             DropdownItem(tr("sort.title"), onClick = { navigate(6) }),
                         ))) { Icon(MiuixIcons.More, contentDescription = tr("goal.menu"), modifier = Modifier.size(24.dp)) }
                     }
-                    if (goals.isEmpty()) {
+                    if (activeGoals.isEmpty()) {
                         EmptyCard("star", tr("home.first_wish_here"), tr("goal.create_intro"), tr("goal.create_my_goal")) {
                             editingGoalId = null; goalEditor = true
                         }
@@ -1263,20 +1277,49 @@ private fun SavingsApp(
                             onEdit = { editingGoalId = goal.id; goalEditor = true },
                             onDelete = { deletingGoal = goal; deletingGoalVisible = true },
                             onSync = { updateGoalBalances(goal) },
+                            onArchive = { archivingGoal = goal; archivingVisible = true },
                             collapseActions = appearance.collapseCardActions,
                             decimals = appearance.bannerDecimals)
                     }
                     if (goalGrid) {
                         // Wider windows use two card columns; the sort page remains a single
                         // column because its drag maths is slot based.
-                        goals.chunked(2).forEach { pair ->
+                        activeGoals.chunked(2).forEach { pair ->
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 pair.forEach { goal -> Box(Modifier.weight(1f)) { goalCard(goal) } }
                                 if (pair.size == 1) Spacer(Modifier.weight(1f))
                             }
                         }
                     } else {
-                        goals.forEach { goalCard(it) }
+                        activeGoals.forEach { goalCard(it) }
+                    }
+                }
+                9 -> {
+                    val vaultGoals = goals.filter { it.archived }
+                    if (vaultGoals.isEmpty()) {
+                        // A section caption like the settings page's quote row, but it is not
+                        // clickable: it only tells the user the vault is still waiting.
+                        SmallTitle(tr("vault.empty"), insideMargin = SectionTitlePadding)
+                    } else {
+                        val vaultCard: @Composable (SavingGoal) -> Unit = { goal ->
+                            GoalCard(goal, accounts,
+                                onEdit = { removingGoal = goal; removingVisible = true },
+                                onDelete = { deletingGoal = goal; deletingGoalVisible = true },
+                                onSync = {},
+                                onArchive = {},
+                                collapseActions = appearance.collapseCardActions,
+                                decimals = appearance.bannerDecimals)
+                        }
+                        if (goalGrid) {
+                            vaultGoals.chunked(2).forEach { pair ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    pair.forEach { goal -> Box(Modifier.weight(1f)) { vaultCard(goal) } }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        } else {
+                            vaultGoals.forEach { goal -> vaultCard(goal) }
+                        }
                     }
                 }
                 1 -> {
@@ -1525,11 +1568,11 @@ private fun SavingsApp(
                             })
                         // Keep the entry visible while the aggregate is on even if every wish was
                         // deleted; otherwise the user would have no way back to 自动选择.
-                        if (goals.isNotEmpty() || appearance.bannerAllGoals) OverlayDropdownPreference(title = tr("home.banner_goal"),
-                            items = listOf(tr("theme.auto"), tr("theme.all_goals")) + goals.map { it.title },
+                        if (goals.any { !it.archived } || appearance.bannerAllGoals) OverlayDropdownPreference(title = tr("home.banner_goal"),
+                            items = listOf(tr("theme.auto"), tr("theme.all_goals")) + goals.filter { !it.archived }.map { it.title },
                             selectedIndex = when {
                                 appearance.bannerAllGoals -> 1
-                                else -> goals.indexOfFirst { it.id == appearance.featuredGoalId }
+                                else -> goals.filter { !it.archived }.indexOfFirst { it.id == appearance.featuredGoalId }
                                     .let { if (it < 0) 0 else it + 2 }
                             },
                             onSelectedIndexChange = { value ->
@@ -1952,6 +1995,49 @@ private fun SavingsApp(
             }
         }
     }
+    DialogHost(archivingVisible) { finished ->
+        archivingGoal?.let { goal ->
+            AppDialog(
+                show = archivingVisible,
+                title = tr("goal.bittersweet"),
+                onDismiss = { archivingVisible = false },
+                onDismissFinished = { archivingGoal = null; finished() },
+            ) {
+                Note(if (webDavActive) tr("goal.bittersweet_webdav") else tr("goal.bittersweet_local"))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    G2TextButton(text = tr("common.cancel"), onClick = { archivingVisible = false },
+                        modifier = Modifier.weight(1f))
+                    G2TextButton(text = tr("goal.cheer"), onClick = {
+                        if (mutate { store.saveGoal(goal.copy(archived = true)) }) {
+                            archivingVisible = false
+                            // WebDAV mode re-reads every account, so the remaining cards show what
+                            // the finished wish actually took out of them.
+                            if (webDavActive) readWebDav(chooseAccounts = false)
+                        }
+                    }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
+                }
+            }
+        }
+    }
+    DialogHost(removingVisible) { finished ->
+        removingGoal?.let { goal ->
+            AppDialog(
+                show = removingVisible,
+                title = tr("vault.remove_title"),
+                onDismiss = { removingVisible = false },
+                onDismissFinished = { removingGoal = null; finished() },
+            ) {
+                Note(tr("vault.remove_message", goal.title))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    G2TextButton(text = tr("common.cancel"), onClick = { removingVisible = false },
+                        modifier = Modifier.weight(1f))
+                    G2TextButton(text = tr("vault.remove_title"), onClick = {
+                        if (mutate { store.saveGoal(goal.copy(archived = false)) }) removingVisible = false
+                    }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
+                }
+            }
+        }
+    }
     DialogHost(deletingGoalVisible) { finished ->
         deletingGoal?.let { goal ->
             AppDialog(
@@ -2085,14 +2171,18 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     }
 }
 
-@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, collapseActions: Boolean, decimals: Int) {
+@Composable private fun GoalCard(goal: SavingGoal, accounts: List<BankAccount>, onEdit: () -> Unit, onDelete: () -> Unit, onSync: () -> Unit, onArchive: () -> Unit, collapseActions: Boolean, decimals: Int) {
     val color = MiuixTheme.colorScheme.primary
     // On the stock palette in dark mode the card accent moves to the container tint so the bar and
     // the percentage read as accents on the dark surface instead of the heavier primary.
     val accentColor = if (LocalStockPalette.current && isDarkScheme()) MiuixTheme.colorScheme.primaryContainer else color
-    val progress by animateFloatAsState(goal.progress(accounts), tween(650), label = "goal-progress")
+    // A vault card is a finished wish: it always reads as complete, whatever the balances do.
+    val archived = goal.archived
+    val shownProgress = if (archived) 1f else goal.progress(accounts)
+    val completed = goal.target > 0L && goal.saved(accounts) >= goal.target
+    val progress by animateFloatAsState(shownProgress, tween(650), label = "goal-progress")
     val saved = goal.saved(accounts)
-    val percentLabel = formatBannerPercent(goal.progress(accounts), decimals)
+    val percentLabel = formatBannerPercent(shownProgress, decimals)
     Panel {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             IconTile("star")
@@ -2104,16 +2194,20 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             }
             // Collapsed cards hand the corner to the menu, so the in-progress chip steps aside;
             // the achievement chip is still worth showing next to it.
-            if (!collapseActions || saved >= goal.target) {
-                StatusPill(if (saved >= goal.target) tr("goal.completed") else tr("goal.in_progress"))
+            if (!collapseActions || completed) {
+                StatusPill(if (completed || archived) tr("goal.completed") else tr("goal.in_progress"))
             }
             if (collapseActions) {
+                // 苦尽甘来 comes first: a finished wish is about to leave this list, so its one
+                // meaningful action should not sit under the routine ones.
+                val actions = buildList {
+                    if (!archived && completed) add(DropdownItem(tr("goal.bittersweet"), onClick = onArchive))
+                    if (!archived) add(DropdownItem(tr("account.update_balance"), onClick = onSync))
+                    add(DropdownItem(tr("common.edit"), onClick = onEdit))
+                    add(DropdownItem(tr("common.delete"), onClick = onDelete))
+                }
                 OverlayIconDropdownMenu(
-                    entry = DropdownEntry(listOf(
-                        DropdownItem(tr("account.update_balance"), onClick = onSync),
-                        DropdownItem(tr("common.edit"), onClick = onEdit),
-                        DropdownItem(tr("common.delete"), onClick = onDelete),
-                    )),
+                    entry = DropdownEntry(actions),
                     modifier = Modifier.padding(start = 4.dp),
                 ) { Icon(MiuixIcons.More, contentDescription = tr("goal.menu"), modifier = Modifier.size(20.dp)) }
             }
@@ -2132,8 +2226,18 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
             modifier = Modifier.semantics { contentDescription = tr("home.progress_percent", percentLabel) },
             colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = accentColor, backgroundColor = MiuixTheme.colorScheme.secondaryContainer))
         if (!collapseActions) {
-            G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.fillMaxWidth(),
-                colors = primaryTextButtonColors())
+            // At the target the read shrinks to half a row so 苦尽甘来 can sit beside it; a vault
+            // card keeps neither, only the edit / delete pair.
+            when {
+                archived -> Unit
+                completed -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    G2TextButton(text = tr("account.update_balance"), onClick = onSync, modifier = Modifier.weight(1f),
+                        colors = primaryTextButtonColors())
+                    G2TextButton(text = tr("goal.bittersweet"), onClick = onArchive, modifier = Modifier.weight(1f))
+                }
+                else -> G2TextButton(text = tr("account.update_balance"), onClick = onSync,
+                    modifier = Modifier.fillMaxWidth(), colors = primaryTextButtonColors())
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 G2TextButton(text = tr("common.edit"), onClick = onEdit, modifier = Modifier.weight(1f))
                 G2TextButton(text = tr("common.delete"), onClick = onDelete, modifier = Modifier.weight(1f))

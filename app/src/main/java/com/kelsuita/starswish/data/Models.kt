@@ -62,6 +62,9 @@ data class SavingGoal(
     val createdAt: Long = 0L,
     /** Account-level snapshots; empty for goals written before this field existed. */
     val links: List<GoalAccountLink> = emptyList(),
+    /** Set once the wish moved into 珍藏馆; it leaves the active list and stops counting toward
+     *  the banner, and its card can only be taken back out of the vault. */
+    val archived: Boolean = false,
 ) {
     fun saved(accounts: List<BankAccount>): Long {
         val linked = accounts.filter { it.id in accountIds }
