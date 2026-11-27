@@ -166,6 +166,7 @@
   "goal.target_amount": "目标金额（元）",
   "goal.target_amount_line": "目标 ¥ %s",
     "goal.no_accounts": "没有关联账户",
+    "goal.no_accounts_notice": "未设置关联账户，无法使用更新余额选项",
   "home.all_wishes": "全部心愿",
   "home.banner": "首页横幅",
   "home.banner_description": "首页横幅 %s %s",

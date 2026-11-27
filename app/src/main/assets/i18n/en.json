@@ -166,6 +166,7 @@
   "goal.target_amount": "Goal amount (yuan)",
   "goal.target_amount_line": "Goal ¥ %s",
     "goal.no_accounts": "No linked account",
+    "goal.no_accounts_notice": "No linked account — the update-balance action is unavailable",
   "home.all_wishes": "All wishes",
   "home.banner": "Home banner",
   "home.banner_description": "Home banner %s %s",

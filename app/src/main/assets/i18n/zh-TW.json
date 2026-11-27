@@ -166,6 +166,7 @@
   "goal.target_amount": "目標金額（元）",
   "goal.target_amount_line": "目標 ¥ %s",
     "goal.no_accounts": "沒有關聯帳戶",
+    "goal.no_accounts_notice": "未設置關聯帳戶，無法使用更新餘額選項",
   "home.all_wishes": "全部心願",
   "home.banner": "首頁橫幅",
   "home.banner_description": "首頁橫幅 %s %s",

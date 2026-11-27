@@ -166,6 +166,7 @@
   "goal.target_amount": "目標金額（元）",
   "goal.target_amount_line": "目標 ¥ %s",
     "goal.no_accounts": "関連口座なし",
+    "goal.no_accounts_notice": "関連口座が未設定のため、残高更新は使用できません",
   "home.all_wishes": "すべての願い",
   "home.banner": "ホームバナー",
   "home.banner_description": "ホームバナー %s %s",
