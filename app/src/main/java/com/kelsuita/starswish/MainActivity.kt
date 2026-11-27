@@ -1277,14 +1277,14 @@ private fun SavingsApp(
                 0 -> {
                     // 珍藏馆 keeps the finished wishes out of the active list (and the banner).
                     val activeGoals = goals.filter { !it.archived }
-                    Overview(activeGoals, accounts, appearance, accent, deviceAccountName)
+                    Overview(activeGoals, accounts, appearance, accent, deviceAccountName,
+                        onOpenVault = { navigate(9) })
                     captureStatus()
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
                         SmallTitle(tr("home.goal_list"), insideMargin = SectionTitlePadding)
                         OverlayIconDropdownMenu(entry = DropdownEntry(listOf(
                             DropdownItem(tr("goal.new_goal"), onClick = { editingGoalId = null; goalEditor = true }),
-                            DropdownItem(tr("vault.title"), onClick = { navigate(9) }),
                             DropdownItem(tr("sort.title"), onClick = { navigate(6) }),
                         ))) { Icon(MiuixIcons.More, contentDescription = tr("goal.menu"), modifier = Modifier.size(24.dp)) }
                     }
@@ -2162,7 +2162,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
 }
 
 @Composable private fun Overview(goals: List<SavingGoal>, accounts: List<BankAccount>, appearance: Appearance,
-    accent: Color, deviceAccountName: String?) {
+    accent: Color, deviceAccountName: String?, onOpenVault: () -> Unit) {
     // "Add everything up" replaces the featured wish with the merged progress of every wish.
     // It needs at least one wish, otherwise the empty-state banner stays as it is.
     val aggregate = appearance.bannerAllGoals && goals.isNotEmpty()
@@ -2197,12 +2197,21 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     val fill = if (status) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onPrimary
     G2Card(
         modifier = Modifier.fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = tr("home.banner_description", title, if (completed) tr("home.completed") else percentText) },
+            .clearAndSetSemantics {
+                contentDescription = tr("home.banner_description", title,
+                    if (completed) tr("home.completed") else percentText)
+                // A long press has no visual affordance, so offer it as an explicit action too.
+                customActions = listOf(CustomAccessibilityAction(tr("vault.title")) {
+                    onOpenVault()
+                    true
+                })
+            },
         cornerRadius = 20.dp,
         insideMargin = PaddingValues(0.dp),
         colors = CardDefaults.defaultColors(color = base),
         pressFeedbackType = PressFeedbackType.Tilt,
         showIndication = false,
+        onLongPress = onOpenVault,
     ) {
         Box(Modifier.fillMaxWidth()) {
             Box(Modifier.align(Alignment.TopEnd).padding(18.dp)) {
