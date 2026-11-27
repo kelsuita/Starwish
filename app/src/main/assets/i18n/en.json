@@ -29,7 +29,7 @@
   "accessibility.queue_progress": "Reading linked account %d of %d",
   "accessibility.privacy_detail": "It does not read other apps, collect screenshots or upload data, and never taps, records transactions or transfers money. If the page layout changes it may stop recognizing text; update by hand then. You can turn the permission off in system settings at any time.",
   "accessibility.read_and_confirm": "Read and confirm",
-  "accessibility.read_balance": "Read Xiaoxing balance",
+  "accessibility.read_balance": "Read balance",
   "accessibility.read_done_return": "Balance read — return to Starwish",
   "accessibility.read_enabled": "Page reading on · read on demand",
   "accessibility.read_help": "Tap Read, open the account page in Xiaoxing, then come back here to review and confirm the balance. If the page cannot be recognized, update it by hand.",

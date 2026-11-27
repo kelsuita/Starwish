@@ -29,7 +29,7 @@
   "accessibility.queue_progress": "正在讀取第 %d / %d 個關聯帳戶",
   "accessibility.privacy_detail": "不會讀取其他應用程式、收集截圖或上傳資料，不會執行點擊、記帳或轉帳。頁面結構變化時可能無法辨識，請使用手動更新。你可隨時在系統設定關閉此權限。",
   "accessibility.read_and_confirm": "讀取並確認",
-  "accessibility.read_balance": "讀取小星餘額",
+  "accessibility.read_balance": "讀取餘額",
   "accessibility.read_done_return": "已讀取，請返回星願",
   "accessibility.read_enabled": "頁面讀取已開啟 · 視需要讀取",
   "accessibility.read_help": "點擊讀取，進入小星的帳戶詳情頁，再回到這裡核對並確認餘額。若頁面無法辨識，可手動更新。",

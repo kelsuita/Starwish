@@ -29,7 +29,7 @@
   "accessibility.queue_progress": "連携口座を読み取り中 %d / %d",
   "accessibility.privacy_detail": "他のアプリは読み取らず、スクリーンショットの収集やデータのアップロードも行いません。タップ、取引の記録、送金も一切行いません。ページのレイアウトが変わるとテキストを認識できなくなる場合があります。その場合は手動で更新してください。権限はいつでもシステム設定でオフにできます。",
   "accessibility.read_and_confirm": "読み取って確認",
-  "accessibility.read_balance": "Xiaoxingの残高を読み取る",
+  "accessibility.read_balance": "残高を読み取る",
   "accessibility.read_done_return": "残高を読み取りました — Starwishに戻ってください",
   "accessibility.read_enabled": "ページ読み取りオン · 必要時に読み取り",
   "accessibility.read_help": "「読み取る」をタップし、Xiaoxingで口座ページを開いてからここに戻り、残高を確認してください。ページを認識できない場合は手動で更新してください。",
