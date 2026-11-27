@@ -2011,11 +2011,15 @@ private fun SavingsApp(
             onDismiss = { accountEditor = false },
             onDismissFinished = { editingAccountId = null; finished() },
             goals = goals,
-            onSave = { account, updatedGoals ->
+            onSave = { account, updatedGoals, blankBalance ->
                 if (mutate {
                         store.saveAccount(account)
                         updatedGoals.forEach { store.saveGoal(it) }
-                    }) accountEditor = false
+                    }) {
+                    accountEditor = false
+                    // Say it out loud: a saved 0 is easy to mistake for a failed read.
+                    if (blankBalance) notify(tr("account.balance_blank_notice"))
+                }
             },
         )
     }
@@ -2419,7 +2423,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
     goals: List<SavingGoal>,
     onDismiss: () -> Unit,
     onDismissFinished: () -> Unit,
-    onSave: (BankAccount, List<SavingGoal>) -> Unit,
+    onSave: (BankAccount, List<SavingGoal>, Boolean) -> Unit,
 ) {
     var name by rememberSaveable(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var balance by rememberSaveable(existing?.id) { mutableStateOf(existing?.let { Money.input(it.balance) }.orEmpty()) }
@@ -2479,7 +2483,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                     val account = BankAccount(existing?.id ?: UUID.randomUUID().toString(), name.trim(), cents,
                         if (balanceChanged) System.currentTimeMillis() else existing.updatedAt,
                         if (balanceChanged) "account.source_manual" else existing.source)
-                    onSave(account, linkAccountToGoals(account, goals, linkedGoalIds))
+                    onSave(account, linkAccountToGoals(account, goals, linkedGoalIds), balance.isBlank())
                 }
             }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
         }

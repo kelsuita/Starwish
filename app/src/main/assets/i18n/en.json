@@ -49,6 +49,7 @@
   "account.add_savings": "Add a savings account",
   "account.cny_only_note": "CNY savings accounts only; credit limits are not treated as savings.",
     "account.linked_goals": "Linked wishes",
+    "account.balance_blank_notice": "No balance entered — the new account is set to 0",
     "account.linked_goals_note": "Tick a wish to count this account toward it. A start-from-now wish begins from the balance above.",
   "account.current_cny_balance": "Current CNY balance (yuan)",
   "account.delete_linked_message": "This deletes \"%s\". If a goal links this account, edit the goal to unlink it first.",
