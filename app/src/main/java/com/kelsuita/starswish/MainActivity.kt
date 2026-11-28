@@ -484,23 +484,23 @@ private fun SavingsApp(
     }
     val storedAccounts = remember(revision) { store.accounts() }
     val storedGoals = remember(revision) { store.goals() }
-    val goalIds = remember(storedGoals) { storedGoals.map { it.id } }
+    val goalIds = remember(storedGoals) { storedGoals.filterNot { it.archived }.map { it.id } }
+    val vaultIds = remember(storedGoals) { storedGoals.filter { it.archived }.map { it.id } }
     val accountIds = remember(storedAccounts) { storedAccounts.map { it.id } }
     val goalSort = remember(goalIds.toSet(), sortDataVersion) {
-        SortPageState(goalIds, store.sortSettings(goals = true))
+        SortPageState(goalIds, store.sortSettings(SortList.GOALS))
+    }
+    val vaultSort = remember(vaultIds.toSet(), sortDataVersion) {
+        SortPageState(vaultIds, store.sortSettings(SortList.VAULT))
     }
     val accountSort = remember(accountIds.toSet(), sortDataVersion) {
-        SortPageState(accountIds, store.sortSettings(goals = false))
+        SortPageState(accountIds, store.sortSettings(SortList.ACCOUNTS))
     }
     val goalsById = remember(storedGoals) { storedGoals.associateBy { it.id } }
     val accountsById = remember(storedAccounts) { storedAccounts.associateBy { it.id } }
-    // The vault keeps the same global goal order; this view only shows the archived slice, so a
-    // drag inside it is written back into the full order at the slots those wishes occupy.
-    val vaultIds = remember(goalsById, goalSort.order.value) {
-        goalSort.order.value.filter { goalsById[it]?.archived == true }
+    val goals = remember(goalsById, goalSort.order.value, vaultSort.order.value) {
+        (goalSort.order.value + vaultSort.order.value).mapNotNull(goalsById::get)
     }
-    val vaultSort = remember(vaultIds, sortDataVersion) { SortPageState(vaultIds, SortSettings()) }
-    val goals = remember(goalsById, goalSort.order.value) { goalSort.order.value.mapNotNull(goalsById::get) }
     val accounts = remember(accountsById, accountSort.order.value) { accountSort.order.value.mapNotNull(accountsById::get) }
     val developerMode = remember(revision) { store.developerModeEnabled() }
     val webDavMode = remember(revision) { store.webDavBalanceEnabled() }
@@ -538,8 +538,23 @@ private fun SavingsApp(
         sortUndoJob?.cancel()
         sortUndoJob = null
     }
-    fun persistSortOrder(sortingGoals: Boolean, state: SortPageState, ids: List<String>, settings: SortSettings, immediate: Boolean) {
-        val queue = if (sortingGoals) goalSortQueue else accountSortQueue
+    fun sortState(list: SortList) = when (list) {
+        SortList.GOALS -> goalSort
+        SortList.VAULT -> vaultSort
+        SortList.ACCOUNTS -> accountSort
+    }
+    fun sortQueue(list: SortList) = when (list) {
+        SortList.GOALS -> goalSortQueue
+        SortList.VAULT -> vaultSortQueue
+        SortList.ACCOUNTS -> accountSortQueue
+    }
+    fun storedSortIds(list: SortList) = when (list) {
+        SortList.GOALS -> store.goals().filterNot { it.archived }.map { it.id }
+        SortList.VAULT -> store.goals().filter { it.archived }.map { it.id }
+        SortList.ACCOUNTS -> store.accounts().map { it.id }
+    }
+    fun persistSortOrder(list: SortList, state: SortPageState, ids: List<String>, settings: SortSettings, immediate: Boolean) {
+        val queue = sortQueue(list)
         queue.revision++
         val writeRevision = queue.revision
         queue.submit {
@@ -547,15 +562,16 @@ private fun SavingsApp(
                 if (writeRevision != queue.revision) return@withLock
                 try {
                     withContext(Dispatchers.IO) {
-                        if (sortingGoals) store.reorderGoals(ids, settings) else store.reorderAccounts(ids, settings)
+                        if (list == SortList.ACCOUNTS) store.reorderAccounts(ids, settings)
+                        else store.reorderGoals(ids, settings, list)
                     }
                 } catch (error: Exception) {
                     if (error is CancellationException) throw error
                     if (writeRevision == queue.revision) {
                         invalidateSortUndo()
                         state.drag.clear()
-                        state.order.value = if (sortingGoals) store.goals().map { it.id } else store.accounts().map { it.id }
-                        state.settings.value = store.sortSettings(sortingGoals)
+                        state.order.value = storedSortIds(list)
+                        state.settings.value = store.sortSettings(list)
                         notify(error.message ?: tr("common.operation_failed"))
                         refresh()
                     }
@@ -564,26 +580,26 @@ private fun SavingsApp(
         }
         if (immediate) queue.flush()
     }
-    fun applySortOrder(state: SortPageState, sortingGoals: Boolean, ids: List<String>, settings: SortSettings) {
+    fun applySortOrder(state: SortPageState, list: SortList, ids: List<String>, settings: SortSettings) {
         state.drag.clear()
         state.order.value = ids
         state.settings.value = settings
-        persistSortOrder(sortingGoals, state, ids, settings, immediate = true)
+        persistSortOrder(list, state, ids, settings, immediate = true)
     }
-    fun saveManualSort(state: SortPageState, sortingGoals: Boolean, ids: List<String>) {
+    fun saveManualSort(state: SortPageState, list: SortList, ids: List<String>) {
         invalidateSortUndo()
         val settings = SortSettings(manualOrder = ids)
         state.settings.value = settings
-        persistSortOrder(sortingGoals, state, ids, settings, immediate = false)
+        persistSortOrder(list, state, ids, settings, immediate = false)
     }
-    fun sortWithUndo(state: SortPageState, sortingGoals: Boolean, next: List<String>, nextSettings: SortSettings) {
-        val queue = if (sortingGoals) goalSortQueue else accountSortQueue
-        queue.revision++
-        queue.cancel()
+    fun sortWithUndo(state: SortPageState, list: SortList, next: List<String>, nextSettings: SortSettings) {
         val previous = state.snapshot()
         if (previous.order == next && previous.settings == nextSettings) return
         invalidateSortUndo()
-        applySortOrder(state, sortingGoals, next, nextSettings)
+        val queue = sortQueue(list)
+        queue.revision++
+        queue.cancel()
+        applySortOrder(state, list, next, nextSettings)
         sortUndoJob = scope.launch {
             val result = snackbarHostState.showSnackbar(
                 message = tr("sort.done"),
@@ -593,16 +609,17 @@ private fun SavingsApp(
             )
             if (result == SnackbarResult.ActionPerformed && !state.drag.active &&
                 state.snapshot() == SortSnapshot(next, nextSettings)) {
-                val liveIds = if (sortingGoals) store.goals().map { it.id } else store.accounts().map { it.id }
+                val liveIds = storedSortIds(list)
                 if (liveIds.toSet() == next.toSet()) {
-                    applySortOrder(state, sortingGoals, previous.order, previous.settings)
+                    applySortOrder(state, list, previous.order, previous.settings)
                 }
             }
             sortUndoJob = null
         }
     }
-    fun applySortCriterion(sortingGoals: Boolean, index: Int, descending: Boolean) {
-        val state = if (sortingGoals) goalSort else accountSort
+    fun applySortCriterion(list: SortList, index: Int, descending: Boolean) {
+        val state = sortState(list)
+        val sortingGoals = list != SortList.ACCOUNTS
         val current = state.snapshot().order
         val sorted = if (sortingGoals) {
             val wishes = current.mapNotNull(goalsById::get)
@@ -625,25 +642,25 @@ private fun SavingsApp(
             }.map { it.id }
         }
         val next = if (!descending) sorted else if (sortingGoals && index == 5) {
-            val datedCount = goals.count { it.deadline.isNotEmpty() }
+            val datedCount = sorted.count { goalsById.getValue(it).deadline.isNotEmpty() }
             sorted.take(datedCount).reversed() + sorted.drop(datedCount)
         } else sorted.reversed()
         val settings = SortSettings(index, descending,
             state.settings.value.manualOrder ?: current)
-        sortWithUndo(state, sortingGoals, next, settings)
+        sortWithUndo(state, list, next, settings)
     }
-    fun toggleDescending(sortingGoals: Boolean) {
-        val state = if (sortingGoals) goalSort else accountSort
+    fun toggleDescending(list: SortList) {
+        val state = sortState(list)
         val criterion = state.settings.value.criterion
         // Direction only applies to a criterion; a hand-made order has no natural reverse.
-        if (criterion >= 0) applySortCriterion(sortingGoals, criterion, !state.settings.value.descending)
+        if (criterion >= 0) applySortCriterion(list, criterion, !state.settings.value.descending)
     }
-    fun restoreManualOrder(sortingGoals: Boolean) {
-        val state = if (sortingGoals) goalSort else accountSort
+    fun restoreManualOrder(list: SortList) {
+        val state = sortState(list)
         val manual = state.settings.value.manualOrder ?: return
-        val live = if (sortingGoals) goalIds.toSet() else accountIds.toSet()
+        val live = state.order.value.toSet()
         val restored = manual.filter { it in live }.distinct() + state.snapshot().order.filterNot { it in manual }
-        sortWithUndo(state, sortingGoals, restored, SortSettings(manualOrder = restored))
+        sortWithUndo(state, list, restored, SortSettings(manualOrder = restored))
     }
     var backupBusy by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -1172,16 +1189,21 @@ private fun SavingsApp(
                     },
                 actions = {
                     if (displayedPage == 6 || displayedPage == 7 || displayedPage == 10) {
-                        val sortingGoals = displayedPage == 6 || displayedPage == 10
+                        val list = when (displayedPage) {
+                            6 -> SortList.GOALS
+                            10 -> SortList.VAULT
+                            else -> SortList.ACCOUNTS
+                        }
+                        val state = sortState(list)
                         val (criterion, descending, manualOrder) =
-                            (if (sortingGoals) goalSort else accountSort).settings.value
+                            state.settings.value
                         val criteria = when {
                             // Vault cards are always complete, and 剩余金额 says nothing there.
                             displayedPage == 10 -> listOf(
                                 tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
                                 tr("sort.deadline") to 5, tr("sort.achieved") to 6,
                             )
-                            sortingGoals -> listOf(
+                            list == SortList.GOALS -> listOf(
                                 tr("sort.name") to 0, tr("sort.time") to 1, tr("sort.price") to 2,
                                 tr("sort.progress") to 3, tr("sort.remaining") to 4, tr("sort.deadline") to 5,
                             )
@@ -1197,14 +1219,14 @@ private fun SavingsApp(
                                 if (criterion == index) "$label ${if (descending) "↓" else "↑"}" else label,
                                 selected = criterion == index,
                                 onClick = {
-                                    val latest = if (sortingGoals) goalSort else accountSort
-                                    if (latest.settings.value.criterion == index) toggleDescending(sortingGoals)
-                                    else applySortCriterion(sortingGoals, index, latest.settings.value.descending)
+                                    val latest = state.settings.value
+                                    if (latest.criterion == index) toggleDescending(list)
+                                    else applySortCriterion(list, index, latest.descending)
                                 })
                         })
                         val orderEntry = DropdownEntry(listOfNotNull(
                             manualOrder?.takeIf { criterion >= 0 }?.let {
-                                DropdownItem(tr("sort.custom"), onClick = { restoreManualOrder(sortingGoals) })
+                                DropdownItem(tr("sort.custom"), onClick = { restoreManualOrder(list) })
                             },
                         ))
                         OverlayIconDropdownMenu(entries = listOfNotNull(sortEntry, orderEntry.takeIf { it.items.isNotEmpty() }),
@@ -1365,19 +1387,7 @@ private fun SavingsApp(
                         if (goal != null) {
                             SortCard(goal.title, Money.format(goal.target), goal.id, vaultSort.order,
                                 pageScrollState, viewportTop, viewportHeight, vaultSort.drag,
-                                onPersist = { ids ->
-                                    // Keep the active wishes where they are and only rewrite the
-                                    // slots the archived ones already hold.
-                                    val merged = ArrayList<String>(goalSort.order.value.size)
-                                    var cursor = 0
-                                    goalSort.order.value.forEach { current ->
-                                        if (goalsById[current]?.archived == true) {
-                                            merged += ids.getOrNull(cursor) ?: current
-                                            cursor++
-                                        } else merged += current
-                                    }
-                                    saveManualSort(goalSort, true, merged)
-                                })
+                                onPersist = { ids -> saveManualSort(vaultSort, SortList.VAULT, ids) })
                         }
                     } }
                 }
@@ -1508,7 +1518,7 @@ private fun SavingsApp(
                         if (goal != null) {
                             SortCard(goal.title, Money.format(goal.target), goal.id, goalSort.order,
                                 pageScrollState, viewportTop, viewportHeight, goalSort.drag,
-                                onPersist = { ids -> saveManualSort(goalSort, true, ids) })
+                                onPersist = { ids -> saveManualSort(goalSort, SortList.GOALS, ids) })
                         }
                     } }
                 }
@@ -1524,7 +1534,7 @@ private fun SavingsApp(
                         if (account != null) {
                             SortCard(account.name, Money.format(account.balance), account.id, accountSort.order,
                                 pageScrollState, viewportTop, viewportHeight, accountSort.drag,
-                                onPersist = { ids -> saveManualSort(accountSort, false, ids) })
+                                onPersist = { ids -> saveManualSort(accountSort, SortList.ACCOUNTS, ids) })
                         }
                     } }
                 }
@@ -2003,10 +2013,12 @@ private fun SavingsApp(
                                 importVisible = false
                                 refresh()
                                 notify(tr("backup.imported"))
+                                vaultSortQueue.flush()
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
                                 notify(tr("backup.import_failed", error.message ?: tr("common.save_failed")))
                             } finally { backupBusy = false }
+                                    vaultSortQueue.revision++
                         }
                     }, enabled = !backupBusy, modifier = Modifier.weight(1f),
                         colors = primaryTextButtonColors())
