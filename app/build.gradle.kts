@@ -126,8 +126,8 @@ android {
         applicationId = "com.kelsuita.starswish"
         minSdk = 26
         targetSdk = 37
-        versionCode = 32
-        versionName = "Firefly 2.3.0"
+        versionCode = 33
+        versionName = "Jade 2.3.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BUILD_CHANNEL", "\"$buildChannel\"")
     }
