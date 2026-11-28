@@ -39,9 +39,11 @@ internal data class WebDavImportPlan(
         val byId = changes.associateBy { it.accountId }
         require(byId.size == changes.size)
         val existing = accounts.associateBy { it.id }
+        val nameCounts = accounts.groupingBy { it.name }.eachCount()
         changes.forEach { change ->
             val account = existing[change.accountId]
-            require(account != null && account.name == change.name && account.balance == change.before) {
+            require(account != null && account.name == change.name && account.balance == change.before &&
+                nameCounts[change.name] == 1) {
                 tr("common.save_failed")
             }
             require(change.after in -Money.MAX_CENTS..Money.MAX_CENTS)
