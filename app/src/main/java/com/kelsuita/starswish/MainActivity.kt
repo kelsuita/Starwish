@@ -435,6 +435,11 @@ private fun SavingsApp(
     var archivingVisible by remember { mutableStateOf(false) }
     var removingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var removingVisible by remember { mutableStateOf(false) }
+    // A vaulted wish whose linked accounts were deleted: the restore confirmation explains that
+    // those accounts no longer contribute, then drops them from the wish.
+    var restoringMissingGoal by remember { mutableStateOf<SavingGoal?>(null) }
+    var restoringMissingAccounts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var restoringMissingVisible by remember { mutableStateOf(false) }
     // The pending import is kept as JSON so the confirmation survives recreation.
     var pendingBackupJson by rememberSaveable(stateSaver = PendingBackupSaver) { mutableStateOf<String?>(null) }
     var importVisible by rememberSaveable { mutableStateOf(false) }
@@ -909,7 +914,7 @@ private fun SavingsApp(
     val pagerBackEnabled = backStack.size == 1 && selectedTab != 0 &&
         !goalEditor && !accountEditor && !disclosure &&
         !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet &&
-        !archivingVisible && !removingVisible
+        !archivingVisible && !removingVisible && !restoringMissingVisible
     if (appearance.predictiveBackEnabled) {
         NavigationBackHandler(
             state = pagerBackState,
@@ -936,7 +941,8 @@ private fun SavingsApp(
     if (blockPredictive) {
         val activity = context as? ComponentActivity
         DisposableEffect(activity, backStack.size, selectedTab, goalEditor, accountEditor, disclosure,
-            deletingGoalVisible, deletingAccountVisible, importVisible, archivingVisible, removingVisible) {
+            deletingGoalVisible, deletingAccountVisible, importVisible, archivingVisible, removingVisible,
+            restoringMissingVisible) {
             val callback = OnBackInvokedCallback {
                 when {
                     backStack.size > 1 -> popRoute()
@@ -2108,8 +2114,44 @@ private fun SavingsApp(
                     TextButton(text = tr("common.cancel"), onClick = { removingVisible = false },
                         modifier = Modifier.weight(1f))
                     TextButton(text = tr("vault.remove_title"), onClick = {
-                        if (mutate { store.saveGoal(goal.copy(archived = false, archivedAt = 0L)) }) {
+                        val missingIds = goal.accountIds.filter { id -> accounts.none { it.id == id } }
+                        if (missingIds.isEmpty()) {
+                            if (mutate { store.saveGoal(goal.copy(archived = false, archivedAt = 0L)) }) {
+                                removingVisible = false
+                            }
+                        } else {
+                            val names = store.deletedAccountNames(missingIds)
+                            restoringMissingGoal = goal
+                            restoringMissingAccounts = missingIds.associateWith { id ->
+                                names[id] ?: tr("vault.restore_missing_unknown")
+                            }
+                            restoringMissingVisible = true
                             removingVisible = false
+                        }
+                    }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
+                }
+            }
+        }
+    }
+    DialogHost(restoringMissingVisible) { finished ->
+        restoringMissingGoal?.let { goal ->
+            AppDialog(
+                show = restoringMissingVisible,
+                title = tr("vault.restore_missing_title"),
+                onDismiss = { restoringMissingVisible = false },
+                onDismissFinished = { restoringMissingGoal = null; finished() },
+            ) {
+                Note(tr("vault.restore_missing_message", restoringMissingAccounts.values.joinToString("、")))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(text = tr("common.cancel"), onClick = { restoringMissingVisible = false },
+                        modifier = Modifier.weight(1f))
+                    TextButton(text = tr("vault.restore_confirm"), onClick = {
+                        // The deleted accounts are gone from the wish too: their ids and snapshots
+                        // would otherwise linger and count toward the baseline for nothing.
+                        val ids = restoringMissingAccounts.keys
+                        val restored = restoreGoalFromVault(goal, ids)
+                        if (mutate { store.saveGoal(restored); store.forgetDeletedAccountNames(ids) }) {
+                            restoringMissingVisible = false
                         }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
                 }

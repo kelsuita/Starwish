@@ -50,4 +50,28 @@ class GoalLinksTest {
         val unlinked = balanceGoal()
         assertTrue(linkAccountToGoals(account, listOf(unlinked), emptySet()).isEmpty())
     }
+
+    @Test fun restoringAHealthyWishOnlyClearsTheArchiveFlag() {
+        val goal = balanceGoal().copy(archived = true, archivedAt = 1234)
+        val restored = restoreGoalFromVault(goal, emptySet())
+        assertFalse(restored.archived)
+        assertEquals(0L, restored.archivedAt)
+        assertEquals(goal.accountIds, restored.accountIds)
+    }
+
+    @Test fun restoringDropsAccountsDeletedWhileTheWishWasArchived() {
+        val goal = growthGoal().copy(
+            archived = true,
+            archivedAt = 1234,
+            accountIds = setOf("other", "account"),
+            links = growthGoal().links + GoalAccountLink("account", GoalMode.GROWTH, 250000, 9),
+            baseline = 350000,
+        )
+        val restored = restoreGoalFromVault(goal, setOf("account"))
+        assertFalse(restored.archived)
+        assertEquals(0L, restored.archivedAt)
+        assertEquals(setOf("other"), restored.accountIds)
+        assertEquals(listOf("other"), restored.links.map { it.accountId })
+        assertEquals(100000L, restored.baseline)
+    }
 }

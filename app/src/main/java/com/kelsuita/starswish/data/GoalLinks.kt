@@ -40,3 +40,23 @@ fun linkAccountToGoals(
         }
     }
 }
+
+/**
+ * Takes a wish back out of the vault.
+ *
+ * [missingAccountIds] are accounts that were deleted while the wish was archived: a vaulted wish
+ * does not block a deletion, so its frozen account list may point at accounts that no longer
+ * exist. Dropping them here keeps the wish from carrying dead ids and snapshots, and its progress
+ * stops counting what those accounts had contributed.
+ */
+fun restoreGoalFromVault(goal: SavingGoal, missingAccountIds: Set<String>): SavingGoal {
+    if (missingAccountIds.isEmpty()) return goal.copy(archived = false, archivedAt = 0L)
+    val removedBaseline = goal.links.filter { it.accountId in missingAccountIds }.sumOf { it.baseline }
+    return goal.copy(
+        archived = false,
+        archivedAt = 0L,
+        accountIds = goal.accountIds - missingAccountIds,
+        links = goal.links.filterNot { it.accountId in missingAccountIds },
+        baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
+    )
+}
