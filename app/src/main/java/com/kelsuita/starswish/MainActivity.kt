@@ -399,6 +399,7 @@ private fun SavingsApp(
     var disclosure by rememberSaveable { mutableStateOf(false) }
     var webDavSheet by rememberSaveable { mutableStateOf(false) }
     var webDavBusy by remember { mutableStateOf(false) }
+    var vaultRefreshPending by rememberSaveable { mutableStateOf(false) }
     var webDavUrl by rememberSaveable { mutableStateOf("") }
     var webDavAccount by rememberSaveable { mutableStateOf("") }
     var webDavPassword by rememberSaveable { mutableStateOf("") }
@@ -595,10 +596,10 @@ private fun SavingsApp(
     fun sortWithUndo(state: SortPageState, list: SortList, next: List<String>, nextSettings: SortSettings) {
         val previous = state.snapshot()
         if (previous.order == next && previous.settings == nextSettings) return
-        invalidateSortUndo()
         val queue = sortQueue(list)
         queue.revision++
         queue.cancel()
+        invalidateSortUndo()
         applySortOrder(state, list, next, nextSettings)
         sortUndoJob = scope.launch {
             val result = snackbarHostState.showSnackbar(
@@ -896,6 +897,20 @@ private fun SavingsApp(
                 temp.deleteRecursively()
                 webDavBusy = false
             }
+        }
+    }
+
+    // Several archives before the next read can share one full refresh.
+    val vaultRefreshBlocked = archivingGoal != null || webDavBusy || webDavSheet ||
+        webDavChangesVisible || webDavPickerVisible || webDavPlan != null || webDavPicker.isNotEmpty() ||
+        pendingWebDavPlan != null || pendingWebDavPicker != null
+    LaunchedEffect(vaultRefreshPending, vaultRefreshBlocked, webDavActive) {
+        if (!vaultRefreshPending) return@LaunchedEffect
+        if (!webDavActive) {
+            vaultRefreshPending = false
+        } else if (!vaultRefreshBlocked) {
+            vaultRefreshPending = false
+            readWebDav(chooseAccounts = false)
         }
     }
     /**
@@ -1999,10 +2014,12 @@ private fun SavingsApp(
                             try {
                                 invalidateSortUndo()
                                 goalSortQueue.flush()
+                                vaultSortQueue.flush()
                                 accountSortQueue.flush()
                                 sortCommitLock.withLock {
                                     withContext(Dispatchers.IO) { store.importBackup(backup) }
                                     goalSortQueue.revision++
+                                    vaultSortQueue.revision++
                                     accountSortQueue.revision++
                                 }
                                 sortDataVersion++
@@ -2013,12 +2030,10 @@ private fun SavingsApp(
                                 importVisible = false
                                 refresh()
                                 notify(tr("backup.imported"))
-                                vaultSortQueue.flush()
                             } catch (error: Exception) {
                                 if (error is CancellationException) throw error
                                 notify(tr("backup.import_failed", error.message ?: tr("common.save_failed")))
                             } finally { backupBusy = false }
-                                    vaultSortQueue.revision++
                         }
                     }, enabled = !backupBusy, modifier = Modifier.weight(1f),
                         colors = primaryTextButtonColors())
@@ -2111,9 +2126,7 @@ private fun SavingsApp(
                                 store.saveGoal(goal.copy(archived = true, archivedAt = System.currentTimeMillis()))
                             }) {
                             archivingVisible = false
-                            // WebDAV mode re-reads every account, so the remaining cards show what
-                            // the finished wish actually took out of them.
-                            if (webDavActive) readWebDav(chooseAccounts = false)
+                            if (webDavActive) vaultRefreshPending = true
                         }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
                 }
