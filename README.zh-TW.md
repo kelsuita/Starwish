@@ -20,7 +20,7 @@
 
 ## 下載
 
-目前發布版本：[星願 Firefly 2.3.0](https://github.com/kelsuita/Starwish/releases/tag/v2.3.0)
+目前發布版本：[星願 Jade 2.3.2](https://github.com/kelsuita/Starwish/releases/tag/v2.3.2)
 
 - `app-universal-release.apk`：通用架構包，不確定裝置架構時選擇此包
 - `app-armeabi-v7a-release.apk`：32 位元 ARM 裝置
