@@ -39,7 +39,7 @@ data class BackupData(
         val accountIds = accounts.map { it.id }.toSet()
         goals.forEach {
             require(it.id.isNotBlank() && it.id.length <= 128 && it.title.isNotBlank() && it.title.length <= 40 &&
-                it.target in 1..Money.MAX_CENTS && it.accountIds.isNotEmpty() &&
+                it.target in 1..Money.MAX_CENTS &&
                 it.accountIds.size <= accounts.size &&
                 it.accountIds.all { id -> id in accountIds } &&
                 it.baseline in -(50 * Money.MAX_CENTS)..(50 * Money.MAX_CENTS) &&
