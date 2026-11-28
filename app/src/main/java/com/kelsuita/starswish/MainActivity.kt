@@ -2397,13 +2397,18 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("¥ ${Money.format(saved)}", style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
-                // Without an account there is no target to compare against, so the line explains
-                // the missing link instead of showing an amount nothing feeds.
-                Text(if (goal.accountIds.isEmpty()) tr("goal.no_accounts")
-                        else tr("goal.target_amount_line", Money.format(goal.target)),
-                    style = MiuixTheme.textStyles.footnote1,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                // A vault card reports the wish itself: the amount reads as its target, so the
+                // 「目标 ¥…」 line underneath would only repeat the same number.
+                Text("¥ ${Money.format(if (archived) goal.target else saved)}",
+                    style = MiuixTheme.textStyles.title2, fontWeight = FontWeight.Bold)
+                if (!archived) {
+                    // Without an account there is no target to compare against, so the line explains
+                    // the missing link instead of showing an amount nothing feeds.
+                    Text(if (goal.accountIds.isEmpty()) tr("goal.no_accounts")
+                            else tr("goal.target_amount_line", Money.format(goal.target)),
+                        style = MiuixTheme.textStyles.footnote1,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
             }
             Text(percentLabel, style = MiuixTheme.textStyles.title3, fontWeight = FontWeight.Bold, color = accentColor)
         }
