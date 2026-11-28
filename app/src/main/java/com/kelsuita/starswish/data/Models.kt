@@ -67,6 +67,8 @@ data class SavingGoal(
     val archived: Boolean = false,
     /** When the wish entered 珍藏馆; 0 for wishes that never left the active list. */
     val archivedAt: Long = 0L,
+    /** Display names of accounts detached by deletion while this wish was in the vault. */
+    val deletedLinkedAccounts: Map<String, String> = emptyMap(),
 ) {
     fun saved(accounts: List<BankAccount>): Long {
         val linked = accounts.filter { it.id in accountIds }

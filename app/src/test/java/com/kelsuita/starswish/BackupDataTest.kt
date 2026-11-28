@@ -27,7 +27,8 @@ class BackupDataTest {
 
     @Test fun wishesWithoutLinkedAccountsSurviveBackup() {
         val active = backup().goals.single().copy(accountIds = emptySet(), baseline = 0)
-        val archived = active.copy(id = "archived", archived = true, archivedAt = 1764200000000L)
+        val archived = active.copy(id = "archived", archived = true, archivedAt = 1764200000000L,
+            deletedLinkedAccounts = mapOf("deleted" to "储蓄账户"))
         val original = backup().copy(accounts = emptyList(), goals = listOf(active, archived))
         assertEquals(original, BackupData.fromJson(original.toJson()))
     }

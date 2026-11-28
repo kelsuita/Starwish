@@ -44,17 +44,14 @@ fun linkAccountToGoals(
 /**
  * Takes a wish back out of the vault.
  *
- * [missingAccountIds] are accounts that were deleted while the wish was archived: a vaulted wish
- * does not block a deletion, so its frozen account list may point at accounts that no longer
- * exist. Dropping them here keeps the wish from carrying dead ids and snapshots, and its progress
- * stops counting what those accounts had contributed.
+ * [missingAccountIds] may include dangling links left by older builds. Current deletions already
+ * detach the links and retain only their names for the restore warning.
  */
 fun restoreGoalFromVault(goal: SavingGoal, missingAccountIds: Set<String>): SavingGoal {
-    if (missingAccountIds.isEmpty()) return goal.copy(archived = false, archivedAt = 0L)
+    val restored = goal.copy(archived = false, archivedAt = 0L, deletedLinkedAccounts = emptyMap())
+    if (missingAccountIds.isEmpty()) return restored
     val removedBaseline = goal.links.filter { it.accountId in missingAccountIds }.sumOf { it.baseline }
-    return goal.copy(
-        archived = false,
-        archivedAt = 0L,
+    return restored.copy(
         accountIds = goal.accountIds - missingAccountIds,
         links = goal.links.filterNot { it.accountId in missingAccountIds },
         baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
@@ -68,13 +65,16 @@ fun restoreGoalFromVault(goal: SavingGoal, missingAccountIds: Set<String>): Savi
  * wish drops the id, the per-account snapshot and that snapshot's share of the baseline, and its
  * progress stops counting the deleted account.
  */
-fun detachAccountFromGoals(goals: List<SavingGoal>, accountId: String): List<SavingGoal> =
+fun detachAccountFromGoals(goals: List<SavingGoal>, account: BankAccount): List<SavingGoal> =
     goals.mapNotNull { goal ->
+        val accountId = account.id
         if (accountId !in goal.accountIds) return@mapNotNull null
         val removedBaseline = goal.links.filter { it.accountId == accountId }.sumOf { it.baseline }
         goal.copy(
             accountIds = goal.accountIds - accountId,
             links = goal.links.filterNot { it.accountId == accountId },
             baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
+            deletedLinkedAccounts = if (goal.archived) goal.deletedLinkedAccounts + (accountId to account.name)
+                else goal.deletedLinkedAccounts,
         )
     }
