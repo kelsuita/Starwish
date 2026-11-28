@@ -11,6 +11,10 @@ data class SortSettings(
     val manualOrder: List<String>? = null,
 )
 
+internal enum class SortList(val key: String) {
+    GOALS("goal_sort"), VAULT("vault_sort"), ACCOUNTS("account_sort"),
+}
+
 /** One private preference file. Writes update memory immediately and flush to disk asynchronously. */
 class SavingsStore(context: Context) {
     companion object {
@@ -158,7 +162,7 @@ class SavingsStore(context: Context) {
             .putBoolean("collapse_card_actions", value.collapseCardActions)
             .putBoolean("goal_links_v2", true)
             .putInt("language_v2", backup.language)
-            .remove("goal_sort").remove("account_sort")
+            .remove("goal_sort").remove("vault_sort").remove("account_sort")
             .remove("capture").remove("candidate")
         // WebDAV credentials and connection state stay on this device.
         backup.developerMode?.let { editor.putBoolean("developer_mode", it) }
@@ -242,33 +246,49 @@ class SavingsStore(context: Context) {
         put("goals", JSONArray().apply { migrated.forEach { put(goalJson(it)) } }.toString())
         prefs.edit().putBoolean("goal_links_v2", true).apply()
     }
-    fun sortSettings(goals: Boolean): SortSettings = runCatching {
-        val json = JSONObject(prefs.getString(sortKey(goals), "{}") ?: "{}")
+    internal fun sortSettings(list: SortList): SortSettings {
+        val settings = readSortSettings(list)
+        // Older builds stored the vault-only achievement criterion as the home criterion.
+        return when {
+            list == SortList.GOALS && settings.criterion == 6 -> SortSettings()
+            list == SortList.VAULT && !prefs.contains(list.key) -> {
+                readSortSettings(SortList.GOALS).takeIf { it.criterion == 6 } ?: settings
+            }
+            else -> settings
+        }
+    }
+
+    private fun readSortSettings(list: SortList): SortSettings = runCatching {
+        val json = JSONObject(prefs.getString(list.key, "{}") ?: "{}")
         val order = json.optJSONArray("manualOrder")
         SortSettings(json.optInt("criterion", -1), json.optBoolean("descending"),
             order?.let { array -> List(array.length()) { array.getString(it) } })
     }.getOrDefault(SortSettings())
 
-    @Synchronized fun reorderGoals(ids: List<String>, settings: SortSettings) {
+    @Synchronized internal fun reorderGoals(ids: List<String>, settings: SortSettings, list: SortList) {
+        require(list != SortList.ACCOUNTS)
         val current = goals()
-        require(ids.size == current.size && ids.toSet().size == ids.size && ids.toSet() == current.map { it.id }.toSet())
-        val byId = current.associateBy { it.id }
-        prefs.edit().putString("goals", JSONArray().apply {
-            ids.forEach { put(goalJson(byId.getValue(it))) }
-        }.toString()).writeSortSettings(true, settings).apply()
+        val archived = list == SortList.VAULT
+        val ordered = reorderGoalSlice(current, ids, archived)
+        val editor = prefs.edit()
+        // Capture the legacy vault setting before a home sort overwrites its old key.
+        if (!archived && !prefs.contains(SortList.VAULT.key)) {
+            editor.writeSortSettings(SortList.VAULT, sortSettings(SortList.VAULT))
+        }
+        editor.putString("goals", JSONArray().apply {
+            ordered.forEach { put(goalJson(it)) }
+        }.toString()).writeSortSettings(list, settings).apply()
     }
     @Synchronized fun reorderAccounts(ids: List<String>, settings: SortSettings) {
         val current = accounts()
         require(ids.size == current.size && ids.toSet().size == ids.size && ids.toSet() == current.map { it.id }.toSet())
         val byId = current.associateBy { it.id }
         prefs.edit().putString("accounts", accountsJson(ids.map { byId.getValue(it) }).toString())
-            .writeSortSettings(false, settings).apply()
+            .writeSortSettings(SortList.ACCOUNTS, settings).apply()
     }
 
-    private fun sortKey(goals: Boolean) = if (goals) "goal_sort" else "account_sort"
-
-    private fun SharedPreferences.Editor.writeSortSettings(goals: Boolean, settings: SortSettings) =
-        putString(sortKey(goals), JSONObject()
+    private fun SharedPreferences.Editor.writeSortSettings(list: SortList, settings: SortSettings) =
+        putString(list.key, JSONObject()
             .put("criterion", settings.criterion)
             .put("descending", settings.descending)
             .put("manualOrder", settings.manualOrder?.let { JSONArray(it) }).toString())
