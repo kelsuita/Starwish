@@ -110,5 +110,8 @@ class WebDavAccountSelectionTest {
         assertThrows(IllegalArgumentException::class.java) {
             valid.updatedAccounts(listOf(local("a", 51), local("b", 100)), 10)
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            valid.updatedAccounts(existing + local("a", 999, "duplicate"), 10)
+        }
     }
 }

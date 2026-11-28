@@ -860,9 +860,9 @@ private fun SavingsApp(
                     } else presentWebDavPicker(options)
                     return@launch
                 }
-                val current = store.accounts().let { accounts ->
-                    if (requested.isEmpty()) accounts else accounts.filter { it.id in requested }
-                }
+                val localAccounts = store.accounts()
+                val localNameCounts = localAccounts.groupingBy { it.name }.eachCount()
+                val current = if (requested.isEmpty()) localAccounts else localAccounts.filter { it.id in requested }
                 if (current.isEmpty()) throw SyncError("webdav.error_empty_accounts")
                 var matched = 0
                 val changes = current.mapNotNull { account ->
@@ -874,7 +874,9 @@ private fun SavingsApp(
                         if (requested.size == 1) throw SyncError("webdav.error_empty_accounts")
                         return@mapNotNull null
                     }
-                    if (matches.size != 1) throw SyncError("webdav.error_match", account.name)
+                    if (matches.size != 1 || localNameCounts[account.name] != 1) {
+                        throw SyncError("webdav.error_match", account.name)
+                    }
                     val match = matches.single()
                     if (match.currency != 0) throw SyncError("webdav.error_currency", account.name)
                     matched++
