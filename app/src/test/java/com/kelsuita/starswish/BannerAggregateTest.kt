@@ -22,6 +22,14 @@ class BannerAggregateTest {
         assertEquals(2f / 3f, result.progress, 0.0001f)
     }
 
+    @Test fun negativeCurrentBalanceReducesTheBannerOnceAcrossSharedWishes() {
+        val balances = listOf(a, b.copy(balance = -30_000))
+        val wish = SavingGoal("a", "旅行", 200_000, setOf("a", "b"))
+        assertEquals(70_000L, wish.saved(balances))
+        assertEquals(wish.saved(balances), BannerAggregate.saved(listOf(wish), balances))
+        assertEquals(70_000L, BannerAggregate.saved(listOf(wish, wish.copy(id = "b")), balances))
+    }
+
     @Test fun multipleStartFromNowWishesUseEarliestBaseline() {
         val first = growth("first", setOf("a"), listOf(GoalAccountLink("a", GoalMode.GROWTH, 20_000, 1)))
         val second = growth("second", setOf("a"), listOf(GoalAccountLink("a", GoalMode.GROWTH, 60_000, 1)))

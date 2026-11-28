@@ -6,9 +6,9 @@ import java.math.BigInteger
  * Progress for the "add everything up" banner option.
  *
  * Every wish contributes an interval of an account's balance: current-balance wishes cover
- * `[0, balance]`, "start from now" wishes cover `[start, balance]`. Intervals of the same account
- * are merged, so an account shared by several wishes is only counted once, and a current-balance
- * wish swallows the account entirely.
+ * the signed current balance, while "start from now" wishes cover `[start, balance]`.
+ * Intervals of the same account are merged. Negative current balances are deducted once per
+ * account, independently of any positive growth since its snapshot.
  */
 object BannerAggregate {
 
@@ -20,10 +20,12 @@ object BannerAggregate {
         if (goals.isEmpty()) return 0L
         val balances = accounts.associate { it.id to it.balance }
         val perAccount = HashMap<String, MutableList<LongArray>>()
+        val overdrawn = mutableSetOf<String>()
         goals.forEach { goal ->
             val starts = if (goal.mode == GoalMode.GROWTH) startsFor(goal, accounts) else emptyMap()
-            goal.accountIds.forEach { accountId ->
-                val balance = balances[accountId] ?: return@forEach
+            goal.accountIds.forEach account@{ accountId ->
+                val balance = balances[accountId] ?: return@account
+                if (goal.mode == GoalMode.BALANCE && balance < 0L) overdrawn.add(accountId)
                 val from = if (goal.mode == GoalMode.GROWTH) starts[accountId] ?: balance else 0L
                 if (balance > from) {
                     perAccount.getOrPut(accountId) { ArrayList() }.add(longArrayOf(from, balance))
@@ -31,7 +33,7 @@ object BannerAggregate {
             }
         }
         val merged = perAccount.values.sumOf { intervals -> mergedLength(intervals) }
-        return merged.coerceIn(0L, target(goals))
+        return (merged + overdrawn.sumOf { balances.getValue(it) }).coerceIn(0L, target(goals))
     }
 
     fun result(goals: List<SavingGoal>, accounts: List<BankAccount>): Result {
