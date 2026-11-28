@@ -223,12 +223,11 @@ class MainActivity : ComponentActivity() {
         confirmBalanceRequested = intent.action == ACTION_CONFIRM_BALANCE
         enableEdgeToEdge()
         val store = SavingsStore(this)
-        // Upgrade goal-wide baselines to per-account snapshots before the first frame, so the
-        // banner and cards never render a half-migrated state.
-        store.migrateGoalLinks()
         // The language lives outside the appearance snapshot: every screen reads it through
         // Languages.tr while composing, so updating it here repaints without a restart.
         Languages.set(AppLanguage.entries[store.language()])
+        // Upgrade goal links before the banner or cards read the stored wishes.
+        store.migrateGoalLinks()
         setContent {
             val appearance = remember(revision) { store.appearance() }
             val dark = when (appearance.themeMode) {
@@ -399,7 +398,10 @@ private fun SavingsApp(
     var disclosure by rememberSaveable { mutableStateOf(false) }
     var webDavSheet by rememberSaveable { mutableStateOf(false) }
     var webDavBusy by remember { mutableStateOf(false) }
-    var vaultRefreshPending by rememberSaveable { mutableStateOf(false) }
+    // Keep the request pending across Activity recreation until it gets a terminal result.
+    var vaultRefreshRequest by rememberSaveable { mutableStateOf(0L) }
+    var vaultRefreshHandled by rememberSaveable { mutableStateOf(0L) }
+    var vaultRefreshInConfirmation by remember { mutableStateOf<Long?>(null) }
     var webDavUrl by rememberSaveable { mutableStateOf("") }
     var webDavAccount by rememberSaveable { mutableStateOf("") }
     var webDavPassword by rememberSaveable { mutableStateOf("") }
@@ -750,10 +752,15 @@ private fun SavingsApp(
         captureQueue = emptyList()
         captureTotal = 0
     }
+    fun webDavReadBlocked(): Boolean = webDavBusy || webDavChangesVisible || webDavPickerVisible ||
+        webDavPlan != null || webDavPicker.isNotEmpty() || pendingWebDavPlan != null || pendingWebDavPicker != null
+
     fun beginWebDavRead(accountIds: List<String> = emptyList()) {
         if (!store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
-        pendingWebDavPlan = null
-        pendingWebDavPicker = null
+        if (webDavReadBlocked()) {
+            notify(tr("webdav.finish_current_read"))
+            return
+        }
         webDavAccountIds = accountIds
         webDavUrl = store.webDavUrl()
         webDavAccount = store.webDavAccount()
@@ -778,16 +785,7 @@ private fun SavingsApp(
     /** Applies a plan in one store mutation; returns false when the store rejected it. */
     fun applyWebDavPlan(plan: WebDavImportPlan): Boolean {
         val now = System.currentTimeMillis()
-        val applied = mutate {
-            plan.additions.forEach { addition ->
-                store.saveAccount(BankAccount(UUID.randomUUID().toString(), addition.name, addition.cents, now,
-                    source = "account.source_webdav"))
-            }
-            if (plan.changes.isNotEmpty()) {
-                store.saveAccountBalances(plan.changes.associate { it.accountId to it.after }, now)
-            }
-            store.markWebDavConnected()
-        }
+        val applied = mutate { store.applyWebDavPlan(plan, now) }
         if (applied) notify(when {
             plan.changes.isEmpty() && plan.additions.isEmpty() -> tr("webdav.no_changes")
             plan.additions.isEmpty() -> tr("webdav.success", plan.changes.size)
@@ -800,18 +798,35 @@ private fun SavingsApp(
         if (!webDavPickerVisible) return
         val selected = webDavPicker.filter { it.note == null && it.id in webDavPickerSelection }
         if (selected.isEmpty()) return
-        val plan = WebDavAccountSelection.plan(webDavPicker, webDavPickerSelection, store.accounts())
+        val plan = try {
+            WebDavAccountSelection.plan(webDavPicker, webDavPickerSelection, store.accounts())
+        } catch (error: IllegalArgumentException) {
+            notify(error.message ?: tr("common.save_failed"))
+            return
+        } catch (error: SyncError) {
+            notify(error.arg?.let { tr(error.key, it) } ?: tr(error.key))
+            return
+        }
         if (!applyWebDavPlan(plan)) return
         webDavPickerVisible = false
     }
-    fun readWebDav(accountIds: List<String> = emptyList(), chooseAccounts: Boolean = true) {
-        if (webDavBusy || webDavChangesVisible || !store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
+    fun readWebDav(
+        accountIds: List<String> = emptyList(),
+        chooseAccounts: Boolean = true,
+        vaultRequest: Long? = null,
+    ) {
+        if (!store.developerModeEnabled() || !store.webDavBalanceEnabled()) return
+        if (webDavReadBlocked()) {
+            if (vaultRequest == null) notify(tr("webdav.finish_current_read"))
+            return
+        }
         val saveCredentials = webDavSheet
         val requested = if (saveCredentials) webDavAccountIds else accountIds
         // Only a real credential edit should invalidate the stored "connected" state.
         val credentialsEdited = saveCredentials && (webDavPasswordEdited ||
             webDavUrl.trim() != store.webDavUrl() || webDavAccount.trim() != store.webDavAccount())
         webDavBusy = true
+        if (!saveCredentials && vaultRequest == null) notify(tr("webdav.reading_toast"))
         scope.launch {
             val temp = File(context.cacheDir, "webdav-${UUID.randomUUID()}").apply { mkdirs() }
             var client: WebDavClient? = null
@@ -878,10 +893,12 @@ private fun SavingsApp(
                     pendingWebDavPlan = WebDavImportPlan(changes, emptyList())
                 } else {
                     webDavPlan = WebDavImportPlan(changes, emptyList())
+                    vaultRefreshInConfirmation = vaultRequest
                     webDavChangesVisible = true
                 }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
+                if (vaultRequest != null) vaultRefreshHandled = vaultRequest
                 Log.w("StarwishWebDav", "WebDAV balance import failed", error)
                 if (error is SyncError && error.key == "webdav.error_auth") {
                     // Rejected credentials must not keep showing as a working connection.
@@ -900,16 +917,14 @@ private fun SavingsApp(
     }
 
     // Several archives before the next read can share one full refresh.
-    val vaultRefreshBlocked = archivingGoal != null || webDavBusy || webDavSheet ||
-        webDavChangesVisible || webDavPickerVisible || webDavPlan != null || webDavPicker.isNotEmpty() ||
-        pendingWebDavPlan != null || pendingWebDavPicker != null
-    LaunchedEffect(vaultRefreshPending, vaultRefreshBlocked, webDavActive) {
-        if (!vaultRefreshPending) return@LaunchedEffect
+    val vaultRefreshBlocked = archivingGoal != null || webDavSheet || webDavReadBlocked()
+    LaunchedEffect(vaultRefreshRequest, vaultRefreshHandled, vaultRefreshBlocked, webDavActive) {
+        if (vaultRefreshRequest == vaultRefreshHandled) return@LaunchedEffect
         if (!webDavActive) {
-            vaultRefreshPending = false
+            vaultRefreshHandled = vaultRefreshRequest
         } else if (!vaultRefreshBlocked) {
-            vaultRefreshPending = false
-            readWebDav(chooseAccounts = false)
+            if (store.accounts().isEmpty()) vaultRefreshHandled = vaultRefreshRequest
+            else readWebDav(chooseAccounts = false, vaultRequest = vaultRefreshRequest)
         }
     }
     /**
@@ -927,7 +942,6 @@ private fun SavingsApp(
         }
         if (webDavActive) {
             if (webDavConnected) {
-                notify(tr("webdav.reading_toast"))
                 readWebDav(ids)
             } else beginWebDavRead(ids)
         } else {
@@ -936,11 +950,19 @@ private fun SavingsApp(
             startNextCapture()
         }
     }
+    fun closeWebDavChanges() {
+        vaultRefreshInConfirmation?.let { vaultRefreshHandled = it }
+        vaultRefreshInConfirmation = null
+        webDavChangesVisible = false
+    }
     fun confirmWebDavChanges() {
         if (!webDavChangesVisible) return
         val plan = webDavPlan ?: return
-        if (applyWebDavPlan(plan)) webDavChangesVisible = false
+        if (applyWebDavPlan(plan)) closeWebDavChanges()
     }
+
+    fun webDavPickerRemainingSlots(): Int = WebDavAccountSelection.newAccountSlots(accounts.size) -
+        webDavPicker.count { it.creates && it.id in webDavPickerSelection }
     val accent = MiuixTheme.colorScheme.primary
     // Grouped cards use surfaceContainer; surface keeps their boundary visible in
     // the stock palette too (background and surfaceContainer are both white).
@@ -1469,7 +1491,6 @@ private fun SavingsApp(
                         val readBalance = {
                             if (webDavActive) {
                                 if (webDavConnected) {
-                                    notify(tr("webdav.reading_toast"))
                                     readWebDav(listOf(account.id))
                                 } else beginWebDavRead(listOf(account.id))
                             } else capture(account)
@@ -1925,8 +1946,9 @@ private fun SavingsApp(
                     style = MiuixTheme.textStyles.footnote1,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                 G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
+                    val remainingSlots = webDavPickerRemainingSlots()
                     webDavPicker.forEach { option ->
-                        val note = option.note
+                        val note = WebDavAccountSelection.selectionNote(option, webDavPickerSelection, remainingSlots)
                         val amount = "¥ ${Money.format(option.cents)}"
                         CheckboxPreference(
                             title = option.name,
@@ -1937,9 +1959,12 @@ private fun SavingsApp(
                             },
                             checked = option.id in webDavPickerSelection,
                             enabled = note == null,
-                            onCheckedChange = { checked ->
-                                webDavPickerSelection = if (checked) webDavPickerSelection + option.id
-                                else webDavPickerSelection - option.id
+                        onCheckedChange = { checked ->
+                                if (!checked) webDavPickerSelection -= option.id
+                                else if (WebDavAccountSelection.selectionNote(option, webDavPickerSelection,
+                                        webDavPickerRemainingSlots()) == null) {
+                                    webDavPickerSelection += option.id
+                                }
                             },
                         )
                     }
@@ -1949,9 +1974,9 @@ private fun SavingsApp(
         OverlayBottomSheet(
             show = webDavChangesVisible,
             title = tr("webdav.confirm_title"),
-            startAction = { IconButton(onClick = { webDavChangesVisible = false }) { Icon(MiuixIcons.Close, contentDescription = tr("common.cancel"), tint = MiuixTheme.colorScheme.onBackground) } },
+            startAction = { IconButton(onClick = { closeWebDavChanges() }) { Icon(MiuixIcons.Close, contentDescription = tr("common.cancel"), tint = MiuixTheme.colorScheme.onBackground) } },
             endAction = { IconButton(onClick = { confirmWebDavChanges() }) { Icon(MiuixIcons.Ok, contentDescription = tr("common.confirm"), tint = MiuixTheme.colorScheme.onBackground) } },
-            onDismissRequest = { webDavChangesVisible = false },
+            onDismissRequest = { closeWebDavChanges() },
             onDismissFinished = { webDavPlan = null },
             insideMargin = DpSize(24.dp, 48.dp),
         ) {
@@ -2125,7 +2150,7 @@ private fun SavingsApp(
                                 store.saveGoal(goal.copy(archived = true, archivedAt = System.currentTimeMillis()))
                             }) {
                             archivingVisible = false
-                            if (webDavActive) vaultRefreshPending = true
+                            if (webDavActive) vaultRefreshRequest++
                         }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
                 }

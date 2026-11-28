@@ -33,6 +33,39 @@ class BackupDataTest {
         assertEquals(original, BackupData.fromJson(original.toJson()))
     }
 
+    @Test fun legacyArchivedDanglingAccountIsMigratedBeforeValidation() {
+        val original = backup()
+        val archived = original.goals.single().copy(archived = true, archivedAt = 123L,
+            links = listOf(GoalAccountLink("account", GoalMode.GROWTH, 100_000, 1)))
+        val legacyJson = original.copy(goals = listOf(archived)).toJson()
+            .replace(Regex(""""accounts":\s*\[[\s\S]*?\]"""), "\"accounts\": []")
+        val imported = BackupData.fromJson(legacyJson)
+        val migrated = imported.goals.single()
+        assertTrue(migrated.archived)
+        assertEquals(123L, migrated.archivedAt)
+        assertTrue(migrated.accountIds.isEmpty())
+        assertTrue(migrated.links.isEmpty())
+        assertEquals(0L, migrated.baseline)
+        assertEquals(setOf("account"), migrated.deletedLinkedAccounts.keys)
+        assertEquals(imported, BackupData.fromJson(imported.toJson()))
+    }
+
+    @Test fun legacyVaultMigrationKeepsTheDeletedNameAndRemainingNegativeSnapshot() {
+        val original = backup()
+        val archived = original.goals.single().copy(archived = true, archivedAt = 123L,
+            accountIds = setOf("account", "deleted"), baseline = 10_000L,
+            links = listOf(GoalAccountLink("account", GoalMode.GROWTH, -20_000, 1),
+                GoalAccountLink("deleted", GoalMode.GROWTH, 30_000, 1)))
+        val repaired = migrateMissingGoalAccounts(archived, setOf("account"),
+            mapOf("deleted" to "旧账户"), "Unknown account")
+        assertEquals(mapOf("deleted" to "旧账户"), repaired.deletedLinkedAccounts)
+        assertEquals(setOf("account"), repaired.accountIds)
+        assertEquals(archived.links.take(1), repaired.links)
+        assertEquals(-20_000L, repaired.baseline)
+        val migrated = original.copy(goals = listOf(repaired))
+        assertEquals(migrated, BackupData.fromJson(migrated.toJson()))
+    }
+
     @Test fun caseDistinctAccountNamesCanBeBackedUp() {
         val original = backup().copy(accounts = listOf(
             BankAccount("account", "Savings", 100, 1),

@@ -99,7 +99,14 @@ data class BackupData(
             }
             // Validation messages are already written for the user; do not replace them with
             // the generic parse error above.
-            return decoded.validate()
+            // Older vault builds kept deleted account IDs in the wish itself. Only repair
+            // archived wishes here so genuinely broken active links still fail validation.
+            val liveIds = decoded.accounts.map { it.id }.toSet()
+            val archivedRepaired = decoded.goals.map { goal ->
+                if (goal.archived) migrateMissingGoalAccounts(goal, liveIds, emptyMap(),
+                    tr("vault.restore_missing_unknown")) else goal
+            }
+            return decoded.copy(goals = archivedRepaired).validate()
         }
     }
 }

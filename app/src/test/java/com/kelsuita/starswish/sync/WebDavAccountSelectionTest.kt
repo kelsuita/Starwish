@@ -67,18 +67,48 @@ class WebDavAccountSelectionTest {
         assertTrue(plan.additions.isEmpty())
     }
 
-    @Test fun optionsStopCreatingAccountsAtTheAccountLimit() {
-        val full = WebDavAccountSelection.options(
+    @Test fun newAccountCapacityTracksTheSelection() {
+        val locals = (1..49).map { local("本地$it", 0, "id$it") }
+        val options = WebDavAccountSelection.options(
             listOf(backup(1, "甲", 100), backup(2, "乙", 200)),
-            (1..49).map { local("本地$it", 0, "id$it") },
+            locals,
         )
-        assertEquals(listOf("webdav.picker_full", "webdav.picker_full"), full.map { it.note })
+        val first = option(options, "甲")
+        val second = option(options, "乙")
+        val slots = WebDavAccountSelection.newAccountSlots(locals.size)
+        assertNull(WebDavAccountSelection.selectionNote(first, emptySet(), slots))
+        assertNull(WebDavAccountSelection.selectionNote(second, emptySet(), slots))
+        assertNull(WebDavAccountSelection.selectionNote(first, setOf(1L), slots - 1))
+        assertEquals("webdav.picker_full", WebDavAccountSelection.selectionNote(second, setOf(1L), slots - 1))
+        assertEquals(listOf(WebDavAddition("甲", 100)), WebDavAccountSelection.plan(options, setOf(1L), locals).additions)
+        assertThrows(IllegalArgumentException::class.java) {
+            WebDavAccountSelection.plan(options, setOf(1L, 2L), locals)
+        }
+    }
 
-        // One free slot still offers a new account, but not two.
-        val room = WebDavAccountSelection.options(
-            listOf(backup(1, "甲", 100), backup(2, "乙", 200)),
-            (1..48).map { local("本地$it", 0, "id$it") },
+    @Test fun duplicateBackupNamesCannotUpdateOrCreateAccounts() {
+        val accounts = listOf(local("现有", 50))
+        val options = WebDavAccountSelection.options(
+            listOf(backup(1, "现有", 100), backup(2, "现有", 200),
+                backup(3, "新增", 300), backup(4, "新增", 400)), accounts,
         )
-        assertEquals(listOf(null, null), room.map { it.note })
+        assertTrue(options.all { it.note == "webdav.picker_duplicate" })
+        assertTrue(WebDavAccountSelection.defaultSelection(options).isEmpty())
+        assertEquals(WebDavImportPlan(emptyList(), emptyList()),
+            WebDavAccountSelection.plan(options, setOf(1L, 2L, 3L, 4L), accounts))
+    }
+
+    @Test fun batchValidatesEveryChangeBeforePreparingAnyNewAccount() {
+        val existing = listOf(local("a", 50), local("b", 100))
+        val change = WebDavBalanceChange("a", "a", 50, 75)
+        val invalid = WebDavImportPlan(listOf(change), listOf(WebDavAddition("c", 200), WebDavAddition("b", 300)))
+        assertThrows(IllegalArgumentException::class.java) {
+            invalid.updatedAccounts(existing, 10) { error("must validate before creating accounts") }
+        }
+        val valid = invalid.copy(additions = listOf(WebDavAddition("c", 200)))
+        assertEquals(listOf(75L, 100L, 200L), valid.updatedAccounts(existing, 10) { "c" }.map { it.balance })
+        assertThrows(IllegalArgumentException::class.java) {
+            valid.updatedAccounts(listOf(local("a", 51), local("b", 100)), 10)
+        }
     }
 }
