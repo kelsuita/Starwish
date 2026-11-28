@@ -282,10 +282,35 @@ class SavingsStore(context: Context) {
         editor.apply()
     }
     @Synchronized fun deleteAccount(id: String) {
-        require(goals().none { id in it.accountIds }) { tr("account.error_unlink_first") }
+        // Wishes in the vault do not block a deletion: they are frozen and cannot be edited, so
+        // their account list is left as it is and the account's name is kept aside for the
+        // explanation shown when such a wish comes back to the active list.
+        require(goals().none { !it.archived && id in it.accountIds }) { tr("account.error_unlink_first") }
+        val removed = accounts().firstOrNull { it.id == id }
         writeAccounts(accounts().filterNot { it.id == id })
+        if (removed != null && goals().any { it.archived && id in it.accountIds }) {
+            val names = deletedAccountNamesJson()
+            names.put(id, removed.name)
+            prefs.edit().putString("deleted_account_names", names.toString()).apply()
+        }
         if (candidate()?.accountId == id) clearCandidate()
         if (request()?.accountId == id) cancelCapture()
+    }
+    /** Account id to name, kept for accounts deleted while a vaulted wish still linked them. */
+    private fun deletedAccountNamesJson(): JSONObject =
+        runCatching { JSONObject(prefs.getString("deleted_account_names", "{}") ?: "{}") }
+            .getOrElse { JSONObject() }
+    fun deletedAccountNames(ids: Collection<String>): Map<String, String> {
+        val names = deletedAccountNamesJson()
+        return ids.mapNotNull { id ->
+            names.optString(id, "").takeIf { it.isNotEmpty() }?.let { id to it }
+        }.toMap()
+    }
+    @Synchronized fun forgetDeletedAccountNames(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        val names = deletedAccountNamesJson()
+        ids.forEach { names.remove(it) }
+        prefs.edit().putString("deleted_account_names", names.toString()).apply()
     }
     fun request(): CaptureRequest? = runCatching {
         prefs.getString("capture", null)?.let {
