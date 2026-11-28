@@ -2478,8 +2478,8 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
         FieldError(dateError)
         SmallTitle(text = tr("goal.linked_accounts"), insideMargin = SectionTitlePadding)
         if (accounts.isEmpty()) {
-            Note(tr("account.empty_before_goal"))
-            G2Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text(tr("account.add_first")) }
+            Note(tr("goal.no_accounts"))
+            G2Button(onClick = onAddAccount, modifier = Modifier.fillMaxWidth()) { Text(tr("account.add_savings")) }
         } else {
             G2Card(Modifier.fillMaxWidth(), colors = sheetCardColors()) {
                 accounts.forEach { account ->
@@ -2540,7 +2540,7 @@ private fun formatBannerPercent(progress: Float, decimals: Int): String {
                         selected.toSet(), mode, if (growth) links.sumOf { it.baseline } else 0, date,
                         existing?.colorIndex ?: 0, links = links))
                 }
-            }, enabled = accounts.isNotEmpty(), modifier = Modifier.weight(1f),
+            }, modifier = Modifier.weight(1f),
                 colors = primaryTextButtonColors())
         }
     }
