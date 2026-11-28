@@ -2151,7 +2151,11 @@ private fun SavingsApp(
                         // would otherwise linger and count toward the baseline for nothing.
                         val ids = restoringMissingAccounts.keys
                         val restored = restoreGoalFromVault(goal, ids)
-                        if (mutate { store.saveGoal(restored); store.forgetDeletedAccountNames(ids) }) {
+                        // Another vaulted wish may still link the same deleted account, so keep the
+                        // name it was recorded under until no archived wish refers to it.
+                        val stillLinked = goals.filter { it.id != goal.id && it.archived }
+                            .flatMap { it.accountIds }.toSet()
+                        if (mutate { store.saveGoal(restored); store.forgetDeletedAccountNames(ids - stillLinked) }) {
                             restoringMissingVisible = false
                         }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
