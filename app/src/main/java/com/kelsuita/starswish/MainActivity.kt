@@ -2191,7 +2191,9 @@ private fun SavingsApp(
                 onDismiss = { deletingAccountVisible = false },
                 onDismissFinished = { deletingAccount = null; finished() },
             ) {
-                Note(tr("account.delete_linked_message", account.name))
+                val linkedCount = goals.count { account.id in it.accountIds }
+                Note(if (linkedCount > 0) tr("account.delete_linked_message", account.name, linkedCount)
+                else tr("account.delete_plain_message", account.name))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(text = tr("common.cancel"), onClick = { deletingAccountVisible = false },
                         modifier = Modifier.weight(1f))

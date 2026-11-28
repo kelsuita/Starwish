@@ -60,3 +60,21 @@ fun restoreGoalFromVault(goal: SavingGoal, missingAccountIds: Set<String>): Savi
         baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
     )
 }
+
+/**
+ * Removes a deleted account from the wishes that link it, returning only the wishes that changed.
+ *
+ * Archiving does not exempt a wish: once the account is gone its balance no longer exists, so the
+ * wish drops the id, the per-account snapshot and that snapshot's share of the baseline, and its
+ * progress stops counting the deleted account.
+ */
+fun detachAccountFromGoals(goals: List<SavingGoal>, accountId: String): List<SavingGoal> =
+    goals.mapNotNull { goal ->
+        if (accountId !in goal.accountIds) return@mapNotNull null
+        val removedBaseline = goal.links.filter { it.accountId == accountId }.sumOf { it.baseline }
+        goal.copy(
+            accountIds = goal.accountIds - accountId,
+            links = goal.links.filterNot { it.accountId == accountId },
+            baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
+        )
+    }
