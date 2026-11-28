@@ -441,8 +441,7 @@ private fun SavingsApp(
     var archivingVisible by remember { mutableStateOf(false) }
     var removingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var removingVisible by remember { mutableStateOf(false) }
-    // A vaulted wish whose linked accounts were deleted: the restore confirmation explains that
-    // those accounts no longer contribute, then drops them from the wish.
+    // The restore confirmation explains which deleted accounts no longer contribute.
     var restoringMissingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var restoringMissingAccounts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var restoringMissingVisible by remember { mutableStateOf(false) }
@@ -2138,7 +2137,11 @@ private fun SavingsApp(
                 show = removingVisible,
                 title = tr("vault.remove_title"),
                 onDismiss = { removingVisible = false },
-                onDismissFinished = { removingGoal = null; finished() },
+                onDismissFinished = {
+                    removingGoal = null
+                    finished()
+                    if (restoringMissingGoal != null) restoringMissingVisible = true
+                },
             ) {
                 Note(tr("vault.remove_message", goal.title))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2146,17 +2149,17 @@ private fun SavingsApp(
                         modifier = Modifier.weight(1f))
                     TextButton(text = tr("vault.remove_title"), onClick = {
                         val missingIds = goal.accountIds.filter { id -> accounts.none { it.id == id } }
-                        if (missingIds.isEmpty()) {
-                            if (mutate { store.saveGoal(goal.copy(archived = false, archivedAt = 0L)) }) {
+                        val legacyNames = store.deletedAccountNames(missingIds)
+                        val deletedNames = goal.deletedLinkedAccounts + missingIds.associateWith { id ->
+                            legacyNames[id] ?: tr("vault.restore_missing_unknown")
+                        }
+                        if (deletedNames.isEmpty()) {
+                            if (mutate { store.saveGoal(restoreGoalFromVault(goal, emptySet())) }) {
                                 removingVisible = false
                             }
                         } else {
-                            val names = store.deletedAccountNames(missingIds)
                             restoringMissingGoal = goal
-                            restoringMissingAccounts = missingIds.associateWith { id ->
-                                names[id] ?: tr("vault.restore_missing_unknown")
-                            }
-                            restoringMissingVisible = true
+                            restoringMissingAccounts = deletedNames
                             removingVisible = false
                         }
                     }, modifier = Modifier.weight(1f), colors = primaryTextButtonColors())
@@ -2177,9 +2180,8 @@ private fun SavingsApp(
                     TextButton(text = tr("common.cancel"), onClick = { restoringMissingVisible = false },
                         modifier = Modifier.weight(1f))
                     TextButton(text = tr("vault.restore_confirm"), onClick = {
-                        // The deleted accounts are gone from the wish too: their ids and snapshots
-                        // would otherwise linger and count toward the baseline for nothing.
-                        val ids = restoringMissingAccounts.keys
+                        // Only legacy links still need to be detached.
+                        val ids = restoringMissingAccounts.keys.intersect(goal.accountIds)
                         val restored = restoreGoalFromVault(goal, ids)
                         // Another vaulted wish may still link the same deleted account, so keep the
                         // name it was recorded under until no archived wish refers to it.

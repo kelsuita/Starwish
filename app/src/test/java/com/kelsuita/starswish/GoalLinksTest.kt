@@ -76,7 +76,7 @@ class GoalLinksTest {
     }
 
     @Test fun deletingAnAccountDetachesItFromEveryWishVaultedOnesIncluded() {
-        val active = balanceGoal()
+        val active = balanceGoal().copy(accountIds = setOf(account.id, other.id))
         val vaulted = growthGoal().copy(
             archived = true,
             accountIds = setOf("other", "account"),
@@ -84,11 +84,23 @@ class GoalLinksTest {
             baseline = 350000,
         )
         val untouched = balanceGoal().copy(id = "g3", accountIds = emptySet())
-        val changed = detachAccountFromGoals(listOf(active, vaulted, untouched), "account")
-        assertEquals(listOf("g2"), changed.map { it.id })
-        assertEquals(setOf("other"), changed.single().accountIds)
-        assertEquals(listOf("other"), changed.single().links.map { it.accountId })
-        assertEquals(100000L, changed.single().baseline)
-        assertTrue(changed.single().archived)
+        val changed = detachAccountFromGoals(listOf(active, vaulted, untouched), account)
+        assertEquals(listOf(active.id, vaulted.id), changed.map { it.id })
+        assertEquals(setOf(other.id), changed[0].accountIds)
+        assertTrue(changed[0].deletedLinkedAccounts.isEmpty())
+        val detachedVaulted = changed[1]
+        assertEquals(setOf(other.id), detachedVaulted.accountIds)
+        assertEquals(listOf(other.id), detachedVaulted.links.map { it.accountId })
+        assertEquals(100000L, detachedVaulted.baseline)
+        assertTrue(detachedVaulted.archived)
+        assertEquals(mapOf(account.id to account.name), detachedVaulted.deletedLinkedAccounts)
+
+        val restored = restoreGoalFromVault(detachedVaulted, emptySet())
+        assertTrue(restored.deletedLinkedAccounts.isEmpty())
+        assertEquals(100000L, restored.baseline)
+
+        val bothDeleted = detachAccountFromGoals(listOf(detachedVaulted), other).single()
+        assertEquals(mapOf(account.id to account.name, other.id to other.name), bothDeleted.deletedLinkedAccounts)
+        assertTrue(bothDeleted.accountIds.isEmpty())
     }
 }

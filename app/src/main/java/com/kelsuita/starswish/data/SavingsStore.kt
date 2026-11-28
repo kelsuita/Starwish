@@ -194,7 +194,10 @@ class SavingsStore(context: Context) {
                         runCatching { GoalMode.valueOf(o.optString("mode", "BALANCE")) }
                             .getOrDefault(GoalMode.BALANCE), o.optLong("baseline"),
                         o.optString("deadline"), o.optInt("colorIndex"), o.optLong("createdAt", i.toLong() + 1),
-                        linksFrom(o, accountIds), o.optBoolean("archived", false), o.optLong("archivedAt", 0L))
+                        linksFrom(o, accountIds), o.optBoolean("archived", false), o.optLong("archivedAt", 0L),
+                        o.optJSONObject("deletedLinkedAccounts")?.let { names ->
+                            names.keys().asSequence().associateWith { names.getString(it) }
+                        }.orEmpty())
                 }
             }.getOrNull()
         }
@@ -305,22 +308,24 @@ class SavingsStore(context: Context) {
         // No wish blocks a deletion: the confirmation warns that the wish loses this account, and
         // the account is detached here from every wish that links it — vaulted ones included — so
         // nothing keeps counting a balance that no longer exists.
+        val accounts = accounts()
+        val account = accounts.firstOrNull { it.id == id } ?: return
         val all = goals()
         val affected = all.filter { id in it.accountIds }
-        writeAccounts(accounts().filterNot { it.id == id })
+        val editor = prefs.edit().putString("accounts", accountsJson(accounts.filterNot { it.id == id }).toString())
         if (affected.isNotEmpty()) {
-            val detached = detachAccountFromGoals(affected, id).associateBy { it.id }
-            put("goals", JSONArray().apply {
+            val detached = detachAccountFromGoals(affected, account).associateBy { it.id }
+            editor.putString("goals", JSONArray().apply {
                 all.forEach { put(goalJson(detached[it.id] ?: it)) }
             }.toString())
         }
-        if (candidate()?.accountId == id) clearCandidate()
-        if (request()?.accountId == id) cancelCapture()
+        if (candidate()?.accountId == id) editor.remove("candidate")
+        if (request()?.accountId == id) editor.remove("capture")
+        editor.apply()
     }
     /**
      * Account id to name recorded when an older build deleted an account that a vaulted wish still
-     * linked. Deletions no longer record names — they detach the account from the wish instead —
-     * so this only feeds the explanation for wishes left with a dangling id.
+     * linked. Current deletions store names directly on the affected wishes.
      */
     private fun deletedAccountNamesJson(): JSONObject =
         runCatching { JSONObject(prefs.getString("deleted_account_names", "{}") ?: "{}") }
@@ -382,6 +387,7 @@ class SavingsStore(context: Context) {
         .put("target", goal.target).put("accountIds", JSONArray(goal.accountIds.toList()))
         .put("mode", goal.mode.name).put("baseline", goal.baseline).put("deadline", goal.deadline)
         .put("colorIndex", goal.colorIndex).put("createdAt", goal.createdAt).put("archived", goal.archived).put("archivedAt", goal.archivedAt)
+        .put("deletedLinkedAccounts", JSONObject(goal.deletedLinkedAccounts))
         .put("links", JSONArray().apply { goal.links.forEach { link ->
             put(JSONObject().put("accountId", link.accountId).put("mode", link.mode.name)
                 .put("baseline", link.baseline).put("baselineAt", link.baselineAt))

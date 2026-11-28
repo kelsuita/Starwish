@@ -42,6 +42,11 @@ data class BackupData(
                 it.target in 1..Money.MAX_CENTS &&
                 it.accountIds.size <= accounts.size &&
                 it.accountIds.all { id -> id in accountIds } &&
+                (it.archived || it.deletedLinkedAccounts.isEmpty()) &&
+                it.deletedLinkedAccounts.all { (id, name) ->
+                    id.isNotBlank() && id.length <= 128 && id !in it.accountIds &&
+                        name.isNotBlank() && name.length <= 40
+                } &&
                 it.baseline in -(50 * Money.MAX_CENTS)..(50 * Money.MAX_CENTS) &&
                 it.links.map { link -> link.accountId }.distinct().size == it.links.size &&
                 it.links.all { link ->
