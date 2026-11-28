@@ -54,6 +54,8 @@
     "account.current_cny_balance": "CNY balance (CNY only)",
   "account.delete_linked_message": "This deletes “%1$s”. Linked wishes: %2$d — their progress will no longer include this account.",
   "account.delete_plain_message": "This deletes “%1$s”. It can't be undone.",
+  "account.delete_confirm_title": "Delete anyway?",
+  "account.delete_confirm_label": "Delete anyway",
   "account.delete_title": "Delete this account?",
   "account.edit": "Edit account",
   "account.empty_before_goal": "No accounts yet. Add one before creating a goal.",

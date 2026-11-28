@@ -54,6 +54,8 @@
     "account.current_cny_balance": "人民币余额（仅支持人民币）",
   "account.delete_linked_message": "将删除「%1$s」。它参与的 %2$d 个心愿将不再计入该账户的余额。",
   "account.delete_plain_message": "将删除「%1$s」。此操作无法复原。",
+  "account.delete_confirm_title": "再次确认删除？",
+  "account.delete_confirm_label": "仍要删除",
   "account.delete_title": "删除这个账户？",
   "account.edit": "编辑账户",
   "account.empty_before_goal": "还没有账户，先添加一个账户再创建目标。",

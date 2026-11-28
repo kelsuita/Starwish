@@ -54,6 +54,8 @@
     "account.current_cny_balance": "人民幣餘額（僅支援人民幣）",
   "account.delete_linked_message": "將刪除「%1$s」。它參與的 %2$d 個心願將不再計入該帳戶的餘額。",
   "account.delete_plain_message": "將刪除「%1$s」。此操作無法復原。",
+  "account.delete_confirm_title": "再次確認刪除？",
+  "account.delete_confirm_label": "仍要刪除",
   "account.delete_title": "刪除這個帳戶？",
   "account.edit": "編輯帳戶",
   "account.empty_before_goal": "還沒有帳戶，先新增一個帳戶再建立目標。",

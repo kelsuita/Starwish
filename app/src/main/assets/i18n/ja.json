@@ -54,6 +54,8 @@
     "account.current_cny_balance": "人民元残高（人民元のみ）",
   "account.delete_linked_message": "「%1$s」を削除します。関連する願い：%2$d 件。これらの進捗には、この口座の残高が含まれなくなります。",
   "account.delete_plain_message": "「%1$s」を削除します。この操作は取り消せません。",
+  "account.delete_confirm_title": "本当に削除しますか？",
+  "account.delete_confirm_label": "削除する",
   "account.delete_title": "この口座を削除しますか？",
   "account.edit": "口座を編集",
   "account.empty_before_goal": "口座がまだありません。目標を作成する前に追加してください。",
