@@ -432,6 +432,11 @@ private fun SavingsApp(
     var deletingAccount by remember { mutableStateOf<BankAccount?>(null) }
     var deletingGoalVisible by remember { mutableStateOf(false) }
     var deletingAccountVisible by remember { mutableStateOf(false) }
+    // Deleting an account that wishes still link asks twice: the plain confirmation first, then a
+    // second dialog spelling out which contribution is lost. [accountDeletePending] carries the
+    // hand-off while the first dialog is still animating away.
+    var accountDeleteStep2 by remember { mutableStateOf(false) }
+    var accountDeletePending by remember { mutableStateOf(false) }
     var archivingGoal by remember { mutableStateOf<SavingGoal?>(null) }
     var archivingVisible by remember { mutableStateOf(false) }
     var removingGoal by remember { mutableStateOf<SavingGoal?>(null) }
@@ -915,7 +920,7 @@ private fun SavingsApp(
     val pagerBackEnabled = backStack.size == 1 && selectedTab != 0 &&
         !goalEditor && !accountEditor && !disclosure &&
         !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet &&
-        !archivingVisible && !removingVisible && !restoringMissingVisible
+        !archivingVisible && !removingVisible && !restoringMissingVisible && !accountDeleteStep2
     if (appearance.predictiveBackEnabled) {
         NavigationBackHandler(
             state = pagerBackState,
@@ -938,12 +943,13 @@ private fun SavingsApp(
     val blockPredictive = !appearance.predictiveBackEnabled &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
         !goalEditor && !accountEditor && !disclosure &&
-        !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet
+        !deletingGoalVisible && !deletingAccountVisible && !importVisible && !bannerDecimalsSheet &&
+        !accountDeleteStep2
     if (blockPredictive) {
         val activity = context as? ComponentActivity
         DisposableEffect(activity, backStack.size, selectedTab, goalEditor, accountEditor, disclosure,
             deletingGoalVisible, deletingAccountVisible, importVisible, archivingVisible, removingVisible,
-            restoringMissingVisible) {
+            restoringMissingVisible, accountDeleteStep2) {
             val callback = OnBackInvokedCallback {
                 when {
                     backStack.size > 1 -> popRoute()
@@ -2190,16 +2196,53 @@ private fun SavingsApp(
                 show = deletingAccountVisible,
                 title = tr("account.delete_title"),
                 onDismiss = { deletingAccountVisible = false },
-                onDismissFinished = { deletingAccount = null; finished() },
+                onDismissFinished = {
+                    // A linked account moves on to the second confirmation instead of finishing.
+                    if (accountDeletePending) {
+                        accountDeletePending = false
+                        accountDeleteStep2 = true
+                    } else {
+                        deletingAccount = null
+                    }
+                    finished()
+                },
             ) {
                 val linkedCount = goals.count { account.id in it.accountIds }
-                Note(if (linkedCount > 0) tr("account.delete_linked_message", account.name, linkedCount)
-                else tr("account.delete_plain_message", account.name))
+                Note(tr("account.delete_plain_message", account.name))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     G2TextButton(text = tr("common.cancel"), onClick = { deletingAccountVisible = false },
                         modifier = Modifier.weight(1f))
                     G2TextButton(text = tr("common.delete"), onClick = {
-                        if (mutate { store.deleteAccount(account.id) }) deletingAccountVisible = false
+                        if (linkedCount > 0) {
+                            accountDeletePending = true
+                            deletingAccountVisible = false
+                        } else if (mutate { store.deleteAccount(account.id) }) {
+                            deletingAccountVisible = false
+                        }
+                    }, modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
+                            textColor = MiuixTheme.colorScheme.onError))
+                }
+            }
+        }
+    }
+    // Second confirmation, only for an account that wishes still link: the balance it holds is
+    // about to leave those wishes, so name the account and the number of affected wishes.
+    DialogHost(accountDeleteStep2) { finished ->
+        deletingAccount?.let { account ->
+            val linkedCount = goals.count { account.id in it.accountIds }
+            AppDialog(
+                show = accountDeleteStep2,
+                title = tr("account.delete_confirm_title"),
+                onDismiss = { accountDeleteStep2 = false },
+                onDismissFinished = { deletingAccount = null; finished() },
+            ) {
+                Note(tr("account.delete_linked_message", account.name, linkedCount))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    G2TextButton(text = tr("common.cancel"), onClick = { accountDeleteStep2 = false },
+                        modifier = Modifier.weight(1f))
+                    G2TextButton(text = tr("account.delete_confirm_label"), onClick = {
+                        if (mutate { store.deleteAccount(account.id) }) accountDeleteStep2 = false
                     }, modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
                             textColor = MiuixTheme.colorScheme.onError))
