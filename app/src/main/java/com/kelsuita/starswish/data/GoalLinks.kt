@@ -48,13 +48,36 @@ fun linkAccountToGoals(
  * detach the links and retain only their names for the restore warning.
  */
 fun restoreGoalFromVault(goal: SavingGoal, missingAccountIds: Set<String>): SavingGoal {
-    val restored = goal.copy(archived = false, archivedAt = 0L, deletedLinkedAccounts = emptyMap())
-    if (missingAccountIds.isEmpty()) return restored
-    val removedBaseline = goal.links.filter { it.accountId in missingAccountIds }.sumOf { it.baseline }
-    return restored.copy(
-        accountIds = goal.accountIds - missingAccountIds,
-        links = goal.links.filterNot { it.accountId in missingAccountIds },
-        baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
+    return goal.withoutAccounts(missingAccountIds)
+        .copy(archived = false, archivedAt = 0L, deletedLinkedAccounts = emptyMap())
+}
+
+/** Converts dangling references from older installs to restore-warning metadata. */
+internal fun migrateMissingGoalAccounts(
+    goal: SavingGoal,
+    liveAccountIds: Set<String>,
+    deletedNames: Map<String, String>,
+    unknownName: String,
+): SavingGoal {
+    val missing = goal.accountIds - liveAccountIds
+    if (missing.isEmpty()) return goal
+    val detached = goal.withoutAccounts(missing)
+    return if (goal.archived) detached.copy(deletedLinkedAccounts = goal.deletedLinkedAccounts +
+        missing.associateWith { deletedNames[it] ?: goal.deletedLinkedAccounts[it] ?: unknownName }) else detached
+}
+
+private fun SavingGoal.withoutAccounts(ids: Set<String>): SavingGoal {
+    if (ids.isEmpty()) return this
+    val remainingIds = accountIds - ids
+    val remainingLinks = links.filterNot { it.accountId in ids }
+    return copy(
+        accountIds = remainingIds,
+        links = remainingLinks,
+        baseline = when {
+            remainingIds.isEmpty() -> 0L
+            links.size == accountIds.size -> remainingLinks.sumOf { it.baseline }
+            else -> baseline - links.filter { it.accountId in ids }.sumOf { it.baseline }
+        },
     )
 }
 
@@ -69,11 +92,7 @@ fun detachAccountFromGoals(goals: List<SavingGoal>, account: BankAccount): List<
     goals.mapNotNull { goal ->
         val accountId = account.id
         if (accountId !in goal.accountIds) return@mapNotNull null
-        val removedBaseline = goal.links.filter { it.accountId == accountId }.sumOf { it.baseline }
-        goal.copy(
-            accountIds = goal.accountIds - accountId,
-            links = goal.links.filterNot { it.accountId == accountId },
-            baseline = (goal.baseline - removedBaseline).coerceAtLeast(0L),
+        goal.withoutAccounts(setOf(accountId)).copy(
             deletedLinkedAccounts = if (goal.archived) goal.deletedLinkedAccounts + (accountId to account.name)
                 else goal.deletedLinkedAccounts,
         )

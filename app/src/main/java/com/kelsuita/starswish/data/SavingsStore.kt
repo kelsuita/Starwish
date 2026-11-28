@@ -2,6 +2,7 @@ package com.kelsuita.starswish.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.kelsuita.starswish.sync.WebDavImportPlan
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,9 +43,6 @@ class SavingsStore(context: Context) {
     /** Connected means saved credentials plus at least one confirmed balance import. */
     fun webDavConnected(): Boolean = prefs.getBoolean("webdav_connected", false) &&
         webDavAccount().isNotBlank() && encryptedWebDavPassword().isNotBlank()
-    fun markWebDavConnected() {
-        prefs.edit().putBoolean("webdav_connected", true).apply()
-    }
     fun markWebDavDisconnected() {
         prefs.edit().putBoolean("webdav_connected", false).apply()
     }
@@ -211,16 +209,10 @@ class SavingsStore(context: Context) {
         writeAccounts(existing.map { if (it.id == account.id) account.copy(createdAt = it.createdAt) else it }
             .let { if (existing.any { it.id == account.id }) it else it + account.copy(createdAt = System.currentTimeMillis()) })
     }
-    @Synchronized fun saveAccountBalances(balances: Map<String, Long>, updatedAt: Long) {
-        val existing = accounts()
-        require(balances.isNotEmpty() && balances.keys.all { id -> existing.any { it.id == id } })
-        require(balances.values.all { it in -Money.MAX_CENTS..Money.MAX_CENTS })
-        val updated = existing.map { account ->
-            balances[account.id]?.let { cents ->
-                account.copy(balance = cents, updatedAt = updatedAt, source = "account.source_webdav")
-            } ?: account
-        }
-        writeAccounts(updated)
+    @Synchronized internal fun applyWebDavPlan(plan: WebDavImportPlan, updatedAt: Long) {
+        val updated = plan.updatedAccounts(accounts(), updatedAt)
+        prefs.edit().putString("accounts", accountsJson(updated).toString())
+            .putBoolean("webdav_connected", true).apply()
     }
     @Synchronized fun saveGoal(goal: SavingGoal) {
         require(goal.title.isNotBlank() && goal.title.length <= 40)
@@ -243,11 +235,25 @@ class SavingsStore(context: Context) {
      * One-time upgrade from a goal-wide baseline to per-account snapshots.
      */
     @Synchronized fun migrateGoalLinks(now: Long = System.currentTimeMillis()) {
-        if (prefs.getBoolean("goal_links_v2", false)) return
+        val migrateBaselines = !prefs.getBoolean("goal_links_v2", false)
+        val migrateMissingAccounts = !prefs.getBoolean("goal_missing_accounts_migrated", false)
+        if (!migrateBaselines && !migrateMissingAccounts) return
         val current = goals()
-        val migrated = BannerAggregate.migrate(current, accounts(), now)
-        put("goals", JSONArray().apply { migrated.forEach { put(goalJson(it)) } }.toString())
-        prefs.edit().putBoolean("goal_links_v2", true).apply()
+        val accounts = accounts()
+        val accountIds = accounts.map { it.id }.toSet()
+        val missing = current.flatMap { it.accountIds }.toSet() - accountIds
+        val names = deletedAccountNames(missing)
+        val repaired = current.map {
+            migrateMissingGoalAccounts(it, accountIds, names, tr("vault.restore_missing_unknown"))
+        }
+        val migrated = BannerAggregate.migrate(repaired, accounts, now)
+        val editor = prefs.edit().putBoolean("goal_links_v2", true)
+            .putBoolean("goal_missing_accounts_migrated", true)
+            .remove("deleted_account_names")
+        if (migrated != current) {
+            editor.putString("goals", JSONArray().apply { migrated.forEach { put(goalJson(it)) } }.toString())
+        }
+        editor.apply()
     }
     internal fun sortSettings(list: SortList): SortSettings {
         val settings = readSortSettings(list)
